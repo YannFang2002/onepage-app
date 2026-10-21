@@ -6,6 +6,19 @@ Android 手机端伴侣应用：连接 OnePage 阅读器，改设置、管文件
 - **零固件改动**：只调用设备已有的 HTTP / WebSocket 接口（与设备自带网页版同一套）
 - **连接方式**：局域网（同路由器）/ 设备热点（`CrossPoint-Reader`，默认 `192.168.4.1`）/ UDP 自动发现（端口 8134）
 
+## 截图
+
+<p align="center">
+  <img src="docs/screenshots/01-device.png" width="24%" alt="设备" />
+  <img src="docs/screenshots/02-settings.png" width="24%" alt="设置" />
+  <img src="docs/screenshots/03-files.png" width="24%" alt="文件" />
+  <img src="docs/screenshots/04-more.png" width="24%" alt="更多" />
+</p>
+
+<p align="center">
+  <sub>设备 · 设置 · 文件 · 更多　|　真机截图：小米 24129PN74C 连接 OnePage X4 热点</sub>
+</p>
+
 ## 功能（v1）
 
 | 模块 | 能力 |
