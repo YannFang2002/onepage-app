@@ -1,9 +1,9 @@
 # OnePage 手机 App — 方案 v0.2（已实施）
 
 > 目标：手机端（Android）直接管理 OnePage 阅读器——连接、改参数、管理文件、装字体。
-> 代码位置：`D:\PROJECT\02.GoodCode\OnePage\coding\onrpage-app`（Kotlin + Compose 工程，可直接 `gradlew assembleRelease`）
-> 固件参照：`coding\crosspoint-onepage`（OnePage / ESP32-C61 移植分支，firmware 0.1.1）
-> 交付物：签名的 release APK，输出到 `OnePage\outputs\`
+> 代码位置：本仓库根目录（Kotlin + Compose 工程，可直接 `gradlew assembleRelease`）
+> 固件参照：OnePage 阅读器固件（ESP32-C61，firmware 0.1.1）
+> 交付物：签名的 release APK，输出到 `app/build/outputs/apk/release/`
 
 **已确认的边界（2026-10-20）**：只做 Android；UI 要现代化；V1 不改任何设备端代码；APK 落到 `outputs`。
 
@@ -137,7 +137,7 @@
 ```
 
 ```
-onrpage-app/
+onepage-app/
 ├─ docs/PLAN.md                 # 本文档
 ├─ tools/mock-device/           # Node 模拟设备（无硬件开发/CI 用）
 │   ├─ server.mjs               # 复刻全部 /api/* 的 JSON 形状

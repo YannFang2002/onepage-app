@@ -25,15 +25,16 @@ Android 手机端伴侣应用：连接 OnePage 阅读器，改设置、管文件
 ```bash
 # 需要 JDK 17 + Android SDK 34
 ./gradlew assembleDebug      # 调试包
-./gradlew assembleRelease    # 正式包（keystore.properties 已在本地生成）
+./gradlew assembleRelease    # 正式包（需先配置签名，见下）
 ./gradlew testDebugUnitTest  # 协议解析单元测试（13 个用例，无需设备）
 ./gradlew updateDebugScreenshotTest   # 生成 Preview 截图，逐屏视觉验收
 ```
 
-产物：`app/build/outputs/apk/…`，当前发布用的包已复制到
-`D:\PROJECT\02.GoodCode\OnePage\outputs\OnePage-1.0.0.apk`（签名版）与 `…-debug.apk`。
+产物在 `app/build/outputs/apk/release/` 与 `app/build/outputs/apk/debug/`。
 
-`local.properties` 指向本机 SDK；`keystore.properties` + `onepage-release.jks` 用于签名，均已在 `.gitignore` 中。
+`local.properties` 指向本机 Android SDK。发布签名需自行准备 `keystore.properties`
+（`storeFile` / `storePassword` / `keyAlias` / `keyPassword`）与对应 `.jks`，两者都已在
+`.gitignore` 中；缺省时 `assembleRelease` 产出的是未签名包。
 
 ## 测试
 
