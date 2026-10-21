@@ -4,6 +4,7 @@ build/
 captures/
 *.log
 *.hprof
+outputs/
 
 # ---- local SDK / signing (never commit) ----
 local.properties

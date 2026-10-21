@@ -75,9 +75,15 @@ android {
 dependencies {
     implementation("androidx.core:core-ktx:1.13.1")
     implementation("androidx.activity:activity-compose:1.9.0")
-    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.2")
-    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.2")
-    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.2")
+    // Lifecycle 2.8 moved LocalLifecycleOwner into androidx.lifecycle.compose and
+    // only Compose UI 1.7+ (BOM 2024.09+) provides that new CompositionLocal. With
+    // the 2024.06 BOM below, a 2.8.x lifecycle makes the minified release build
+    // die on first composition:
+    //   IllegalStateException: CompositionLocal LocalLifecycleOwner not present
+    // Keep the whole Lifecycle group on 2.7.0 until the Compose BOM is upgraded.
+    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.7.0")
+    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.7.0")
+    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.7.0")
 
     implementation(platform("androidx.compose:compose-bom:2024.06.00"))
     implementation("androidx.compose.ui:ui")

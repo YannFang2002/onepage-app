@@ -11,7 +11,10 @@ pluginManagement {
 }
 
 dependencyResolutionManagement {
-    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+    // PREFER_SETTINGS instead of FAIL_ON_PROJECT_REPOS: machines that inject
+    // mirror repositories from a global ~/.gradle/init.gradle (very common
+    // behind the CN network) otherwise abort configuration outright.
+    repositoriesMode.set(RepositoriesMode.PREFER_SETTINGS)
     repositories {
         maven { url = uri("https://maven.aliyun.com/repository/google") }
         maven { url = uri("https://maven.aliyun.com/repository/central") }
