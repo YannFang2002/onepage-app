@@ -99,17 +99,19 @@ class DeviceApiTest {
     }
 
     @Test
-    fun `mkdir posts form fields path and name`() = runBlocking {
+    fun `mkdir sends path and name as query parameters`() = runBlocking {
         server.enqueue(MockResponse().setResponseCode(200).setBody("OK"))
 
         api.createFolder("/Books", "科幻")
 
         val request = server.takeRequest()
-        assertEquals("/mkdir", request.path)
-        assertTrue(request.getHeader("Content-Type")!!.contains("text/plain"))
-        val body = request.body.readUtf8()
-        assertTrue(body.contains("path=%2FBooks"))
-        assertTrue(body.contains("name=%E7%A7%91%E5%B9%BB"))
+        // The firmware's ESP32 WebServer::arg() only reads the query string (or a
+        // urlencoded body), so these must be in the URL, never in a text/plain body.
+        val target = request.path!!
+        assertTrue(target.startsWith("/mkdir?"))
+        assertTrue(target.contains("path=%2FBooks"))
+        assertTrue(target.contains("name=%E7%A7%91%E5%B9%BB"))
+        assertEquals("", request.body.readUtf8())
     }
 
     @Test
@@ -121,18 +123,18 @@ class DeviceApiTest {
         api.delete("/Books/b.epub")
 
         val rename = server.takeRequest()
-        assertEquals("/rename", rename.path)
-        assertTrue(rename.body.readUtf8().contains("name=b.epub"))
+        assertTrue(rename.path!!.startsWith("/rename?"))
+        assertTrue(rename.path!!.contains("path=%2FBooks%2Fa.epub"))
+        assertTrue(rename.path!!.contains("name=b.epub"))
 
         val move = server.takeRequest()
-        assertEquals("/move", move.path)
-        val moveBody = move.body.readUtf8()
-        assertTrue(moveBody.contains("path=%2FBooks%2Fb.epub"))
-        assertTrue(moveBody.contains("dest=%2FRead"))
+        assertTrue(move.path!!.startsWith("/move?"))
+        assertTrue(move.path!!.contains("path=%2FBooks%2Fb.epub"))
+        assertTrue(move.path!!.contains("dest=%2FRead"))
 
         val delete = server.takeRequest()
-        assertEquals("/delete", delete.path)
-        assertTrue(delete.body.readUtf8().contains("path=%2FBooks%2Fb.epub"))
+        assertTrue(delete.path!!.startsWith("/delete?"))
+        assertTrue(delete.path!!.contains("path=%2FBooks%2Fb.epub"))
     }
 
     @Test

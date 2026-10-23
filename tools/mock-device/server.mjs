@@ -101,8 +101,6 @@ const readRaw = (req) => new Promise((resolve) => {
   req.on('end', () => resolve(Buffer.concat(chunks)))
 })
 
-const parseForm = (body) => Object.fromEntries(new URLSearchParams(body))
-
 // -------------------------------------------------------------------- routes
 
 const server = http.createServer(async (req, res) => {
@@ -154,15 +152,24 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (path === '/mkdir' || path === '/rename' || path === '/move' || path === '/delete') {
-    const form = parseForm(await readBody(req))
+    // The firmware reads these through ESP32 WebServer::arg(), which only sees
+    // the query string (or a urlencoded body) — a text/plain body is invisible.
+    // Mirror that contract here so a client regression fails against the mock
+    // instead of only on real hardware.
+    const q = Object.fromEntries(url.searchParams.entries())
+    if (!q.path) return text(res, 400, 'Missing `path` or `paths` argument')
+    if ((path === '/mkdir' || path === '/rename') && !q.name) {
+      return text(res, 400, 'Missing `name` argument')
+    }
+    if (path === '/move' && !q.dest) return text(res, 400, 'Missing `dest` argument')
     if (path === '/mkdir') {
-      const dir = form.path || '/'
+      const dir = q.path || '/'
       state.files[dir] = state.files[dir] || []
-      state.files[dir].push({ name: form.name, size: 0, isDirectory: true, isEpub: false })
+      state.files[dir].push({ name: q.name, size: 0, isDirectory: true, isEpub: false })
     }
     if (path === '/delete') {
-      const dir = (form.path || '/').split('/').slice(0, -1).join('/') || '/'
-      const name = (form.path || '').split('/').pop()
+      const dir = (q.path || '/').split('/').slice(0, -1).join('/') || '/'
+      const name = (q.path || '').split('/').pop()
       state.files[dir] = (state.files[dir] || []).filter((f) => f.name !== name)
     }
     return text(res, 200, 'OK')

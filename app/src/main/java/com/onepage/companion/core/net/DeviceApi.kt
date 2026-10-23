@@ -40,7 +40,6 @@ class DeviceApi(
     val wsUrl: String = "ws://$host:$wsPort"
 
     private val jsonMedia = "application/json; charset=utf-8".toMediaType()
-    private val textMedia = "text/plain; charset=utf-8".toMediaType()
 
     // ---------------------------------------------------------------- status
 
@@ -70,19 +69,19 @@ class DeviceApi(
     }
 
     suspend fun createFolder(path: String, name: String) = withContext(Dispatchers.IO) {
-        postForm("/mkdir", mapOf("path" to path, "name" to name), timeoutMs = 15_000)
+        postQuery("/mkdir", mapOf("path" to path, "name" to name), timeoutMs = 15_000)
     }
 
     suspend fun rename(path: String, newName: String) = withContext(Dispatchers.IO) {
-        postForm("/rename", mapOf("path" to path, "name" to newName), timeoutMs = 15_000)
+        postQuery("/rename", mapOf("path" to path, "name" to newName), timeoutMs = 15_000)
     }
 
     suspend fun move(path: String, dest: String) = withContext(Dispatchers.IO) {
-        postForm("/move", mapOf("path" to path, "dest" to dest), timeoutMs = 20_000)
+        postQuery("/move", mapOf("path" to path, "dest" to dest), timeoutMs = 20_000)
     }
 
     suspend fun delete(path: String) = withContext(Dispatchers.IO) {
-        postForm("/delete", mapOf("path" to path), timeoutMs = 20_000)
+        postQuery("/delete", mapOf("path" to path), timeoutMs = 20_000)
     }
 
     /** Streams to [dest]; returns the file when complete. No Range/resume on device. */
@@ -211,10 +210,19 @@ class DeviceApi(
     private fun postRaw(path: String, body: String, media: okhttp3.MediaType, timeoutMs: Long = 15_000): String =
         execute(Request.Builder().url("$baseUrl$path").post(body.toRequestBody(media)).build(), timeoutMs)
 
-    private fun postForm(path: String, fields: Map<String, String>, timeoutMs: Long = 15_000): String {
-        val encoded = fields.entries.joinToString("&") { (k, v) -> "${encode(k)}=${encode(v)}" }
+    /**
+     * Sends the fields as URL query parameters, not as a form body.
+     *
+     * The firmware uses ESP32 `WebServer::hasArg()/arg()`, which only sees the
+     * query string plus `application/x-www-form-urlencoded` bodies. Posting the
+     * fields as a `text/plain` body makes every file operation answer
+     * `400 Missing \`path\` or \`paths\` argument`. The query string works for
+     * every content type and is what `/api/files` and `/download` already use.
+     */
+    private fun postQuery(path: String, fields: Map<String, String>, timeoutMs: Long = 15_000): String {
+        val query = fields.entries.joinToString("&") { (k, v) -> "${encode(k)}=${encode(v)}" }
         return execute(
-            Request.Builder().url("$baseUrl$path").post(encoded.toRequestBody(textMedia)).build(),
+            Request.Builder().url("$baseUrl$path?$query").post(ByteArray(0).toRequestBody(null)).build(),
             timeoutMs,
         )
     }
