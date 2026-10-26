@@ -35,11 +35,13 @@ import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.EditNote
+import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.Keyboard
 import androidx.compose.material.icons.rounded.MoreHoriz
 import androidx.compose.material.icons.rounded.QrCodeScanner
 import androidx.compose.material.icons.rounded.Radar
 import androidx.compose.material.icons.rounded.Router
+import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.Wifi
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -60,10 +62,13 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import com.onepage.companion.BuildConfig
 import com.onepage.companion.core.model.DiscoveredDevice
 import com.onepage.companion.core.model.SavedDevice
+import com.onepage.companion.ui.ManualJoinHint
 import com.onepage.companion.ui.Phase
 import com.onepage.companion.ui.SessionUiState
 import com.onepage.companion.ui.components.FormSheet
@@ -75,6 +80,8 @@ import com.onepage.companion.ui.components.PillTone
 import com.onepage.companion.ui.components.PrimaryButton
 import com.onepage.companion.ui.components.PromptDialog
 import com.onepage.companion.ui.components.SecondaryButton
+import com.onepage.companion.ui.components.openAppSettings
+import com.onepage.companion.ui.components.openWifiPanel
 import com.onepage.companion.ui.theme.onePageColors
 
 @Composable
@@ -86,8 +93,10 @@ fun ConnectScreen(
     onConnectSaved: (SavedDevice) -> Unit,
     onForget: (SavedDevice) -> Unit,
     onRenameSaved: (SavedDevice, String) -> Unit,
+    onOpenAbout: () -> Unit,
 ) {
     val c = onePageColors
+    val context = LocalContext.current
     var manualSheet by remember { mutableStateOf(false) }
     var renameTarget by remember { mutableStateOf<SavedDevice?>(null) }
 
@@ -171,7 +180,15 @@ fun ConnectScreen(
                 onScan = onScan,
             )
 
-            if (state.error != null) {
+            if (state.manualJoin != null) {
+                Spacer(Modifier.height(14.dp))
+                ManualJoinCard(
+                    hint = state.manualJoin,
+                    message = state.error ?: "自动加入热点失败。",
+                    onOpenWifi = { openWifiPanel(context) },
+                    onOpenAppSettings = { openAppSettings(context) },
+                )
+            } else if (state.error != null) {
                 Spacer(Modifier.height(14.dp))
                 ErrorBanner(state.error)
             }
@@ -210,6 +227,13 @@ fun ConnectScreen(
                 text = "手动输入 IP",
                 onClick = { manualSheet = true },
                 icon = Icons.Rounded.Keyboard,
+            )
+
+            Spacer(Modifier.height(10.dp))
+            SecondaryButton(
+                text = "关于与更新 · v${BuildConfig.VERSION_NAME}",
+                onClick = onOpenAbout,
+                icon = Icons.Rounded.Info,
             )
 
             Spacer(Modifier.height(22.dp))
@@ -457,6 +481,50 @@ private fun ErrorBanner(message: String) {
             style = MaterialTheme.typography.bodySmall,
             color = c.danger,
             modifier = Modifier.weight(1f),
+        )
+    }
+}
+
+/**
+ * Shown when the platform refused to join the reader's open hotspot by itself.
+ * The buttons lead to the two places that can unblock it; meanwhile the view
+ * model keeps probing the AP so the app finishes the connection on its own.
+ */
+@Composable
+private fun ManualJoinCard(
+    hint: ManualJoinHint,
+    message: String,
+    onOpenWifi: () -> Unit,
+    onOpenAppSettings: () -> Unit,
+) {
+    val c = onePageColors
+    OnePageCard(padding = 18.dp) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Rounded.Wifi, null, tint = c.amber, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(8.dp))
+            Text("需要手动加入热点", style = MaterialTheme.typography.titleSmall, color = c.ink)
+        }
+        Spacer(Modifier.height(8.dp))
+        Text(message, style = MaterialTheme.typography.bodySmall, color = c.ink2)
+        Spacer(Modifier.height(14.dp))
+        SecondaryButton(
+            text = "打开 Wi-Fi 列表",
+            icon = Icons.Rounded.Wifi,
+            onClick = onOpenWifi,
+        )
+        if (hint.needsPermission) {
+            Spacer(Modifier.height(8.dp))
+            SecondaryButton(
+                text = "打开应用权限设置",
+                icon = Icons.Rounded.Settings,
+                onClick = onOpenAppSettings,
+            )
+        }
+        Spacer(Modifier.height(10.dp))
+        Text(
+            "连上「${hint.ssid}」后，App 会自动继续连接设备。",
+            style = MaterialTheme.typography.bodySmall,
+            color = c.ink3,
         )
     }
 }

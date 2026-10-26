@@ -2,12 +2,15 @@ package com.onepage.companion
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -17,6 +20,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -35,14 +39,18 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.onepage.companion.core.net.DeviceApi
 import com.onepage.companion.core.update.notesPreview
 import com.onepage.companion.ui.MainShell
 import com.onepage.companion.ui.Phase
 import com.onepage.companion.ui.SessionViewModel
+import com.onepage.companion.ui.UpdateUiState
 import com.onepage.companion.ui.UpdateViewModel
 import com.onepage.companion.ui.components.ConfirmDialog
 import com.onepage.companion.ui.components.openUrl
 import com.onepage.companion.ui.screens.connect.ConnectScreen
+import com.onepage.companion.ui.screens.more.AboutScreen
+import com.onepage.companion.ui.screens.more.UpdateScreen
 import com.onepage.companion.ui.screens.scan.QrScannerScreen
 import com.onepage.companion.ui.theme.OnePageTheme
 import com.onepage.companion.ui.theme.onePageColors
@@ -75,20 +83,33 @@ private fun AppRoot() {
     val connected = state.phase == Phase.Connected && api != null
     var scanning by rememberSaveable { mutableStateOf(false) }
     var updatePromptDismissed by rememberSaveable { mutableStateOf(false) }
+    var infoPage by rememberSaveable { mutableStateOf(InfoPage.None) }
     val context = LocalContext.current
 
     // Check for a new APK as soon as the app opens; the result pops a dialog
     // below but never blocks connecting to a reader.
     LaunchedEffect(Unit) { updater.autoCheck() }
 
+    // Reaching a reader closes the 关于/更新 overlay opened from the connect screen.
+    LaunchedEffect(connected) { if (connected) infoPage = InfoPage.None }
+
+    BackHandler(enabled = infoPage != InfoPage.None) {
+        infoPage = if (infoPage == InfoPage.Update) InfoPage.About else InfoPage.None
+    }
+
+    // The target carries its own DeviceApi: AnimatedContent keeps the outgoing
+    // shell composed for the exit animation, and a plain `api!!` would read the
+    // already-cleared field (NPE) the moment the user disconnects.
+    val target = ShellTarget(connected = connected, api = if (connected) api else null)
     AnimatedContent(
-        targetState = connected,
+        targetState = target,
         transitionSpec = { fadeIn(tween(260)) togetherWith fadeOut(tween(180)) },
         label = "root",
-    ) { isConnected ->
-        if (isConnected) {
+    ) { shell ->
+        val shellApi = shell.api
+        if (shell.connected && shellApi != null) {
             MainShell(
-                api = api!!,
+                api = shellApi,
                 state = state,
                 updates = updateState,
                 onCheckUpdate = updater::check,
@@ -107,8 +128,18 @@ private fun AppRoot() {
                 onConnectSaved = session::connectTo,
                 onForget = session::forget,
                 onRenameSaved = session::renameSaved,
+                onOpenAbout = { infoPage = InfoPage.About },
             )
         }
+    }
+
+    if (infoPage != InfoPage.None) {
+        InfoOverlay(
+            page = infoPage,
+            updateState = updateState,
+            onCheckUpdate = updater::check,
+            onNavigate = { infoPage = it },
+        )
     }
 
     if (scanning) {
@@ -144,6 +175,49 @@ private fun AppRoot() {
             },
             onDismiss = { updatePromptDismissed = true },
         )
+    }
+}
+
+/** What the root cross-fade renders; carrying [api] keeps the exit frame safe. */
+private data class ShellTarget(val connected: Boolean, val api: DeviceApi?)
+
+private enum class InfoPage { None, About, Update }
+
+/** 关于/软件更新, reachable before any reader is connected. */
+@Composable
+private fun InfoOverlay(
+    page: InfoPage,
+    updateState: UpdateUiState,
+    onCheckUpdate: () -> Unit,
+    onNavigate: (InfoPage) -> Unit,
+) {
+    Box(
+        Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+            .statusBarsPadding()
+    ) {
+        AnimatedContent(
+            targetState = page,
+            transitionSpec = {
+                (slideInHorizontally(tween(240)) { it / 4 } + fadeIn(tween(200))) togetherWith
+                    (slideOutHorizontally(tween(200)) { it / 6 } + fadeOut(tween(160)))
+            },
+            label = "info",
+        ) { target ->
+            when (target) {
+                InfoPage.About -> AboutScreen(
+                    onBack = { onNavigate(InfoPage.None) },
+                    onOpenUpdate = { onNavigate(InfoPage.Update) },
+                )
+                InfoPage.Update -> UpdateScreen(
+                    state = updateState,
+                    onCheck = onCheckUpdate,
+                    onBack = { onNavigate(InfoPage.About) },
+                )
+                InfoPage.None -> Unit
+            }
+        }
     }
 }
 

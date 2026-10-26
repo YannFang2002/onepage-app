@@ -200,6 +200,7 @@ onepage-app/
 | M5 | 深色模式、空态/错误态、断线重连、Preview 截图验收 | ✅ 完成 |
 | M6 | 签名打包、APK 输出到 `outputs`、README | ✅ 完成 |
 | M7 | v1.0.2 检查更新：Gitee 镜像优先 / GitHub 兜底，进应用即检查 | ✅ 完成 |
+| M8 | v1.0.3 未连接可看关于/更新、断开不再崩溃、热点加入失败可诊断可续连 | ✅ 完成 |
 
 **未做（明确留到 v2）**：热点一键加入的原生流程（当前引导用户到系统 Wi-Fi 设置）、断点续传、阅读进度、BLE。
 **验收方式**：本机无可用模拟器（缺硬件加速驱动），UI 通过 Compose Preview 截图测试（`gradlew updateDebugScreenshotTest`）逐屏渲染检查；功能路径对照固件源码静态核对 + `tools/mock-device` 可随时联调。

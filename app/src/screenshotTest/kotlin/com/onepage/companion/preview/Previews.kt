@@ -95,6 +95,7 @@ fun ConnectIdlePreview() = Frame {
         onConnectSaved = {},
         onForget = {},
         onRenameSaved = { _, _ -> },
+        onOpenAbout = {},
     )
 }
 
@@ -109,6 +110,7 @@ fun ConnectFoundPreview() = Frame {
         onConnectSaved = {},
         onForget = {},
         onRenameSaved = { _, _ -> },
+        onOpenAbout = {},
     )
 }
 
@@ -123,6 +125,7 @@ fun ConnectDarkPreview() = Frame(dark = true) {
         onConnectSaved = {},
         onForget = {},
         onRenameSaved = { _, _ -> },
+        onOpenAbout = {},
     )
 }
 

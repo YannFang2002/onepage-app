@@ -311,3 +311,38 @@ fun openUrl(context: android.content.Context, url: String) {
             .show()
     }
 }
+
+/**
+ * Opens the system Wi-Fi list (Android 10+ quick panel when available) so the
+ * user can finish a join the platform refused to automate.
+ */
+fun openWifiPanel(context: android.content.Context) {
+    val attempts = buildList {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+            add(android.content.Intent(android.provider.Settings.Panel.ACTION_WIFI))
+        }
+        add(android.content.Intent(android.provider.Settings.ACTION_WIFI_SETTINGS))
+    }
+    for (intent in attempts) {
+        val opened = runCatching {
+            context.startActivity(
+                intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+            )
+        }.isSuccess
+        if (opened) return
+    }
+    android.widget.Toast.makeText(context, "无法打开 Wi-Fi 设置，请到系统设置里手动连接", android.widget.Toast.LENGTH_LONG)
+        .show()
+}
+
+/** Opens this app's permission page, used when a join is blocked by permissions. */
+fun openAppSettings(context: android.content.Context) {
+    val intent = android.content.Intent(
+        android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+        android.net.Uri.fromParts("package", context.packageName, null),
+    ).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+    val opened = runCatching { context.startActivity(intent) }.isSuccess
+    if (!opened) {
+        android.widget.Toast.makeText(context, "无法打开应用设置", android.widget.Toast.LENGTH_SHORT).show()
+    }
+}

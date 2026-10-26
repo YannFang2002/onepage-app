@@ -11,6 +11,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.SystemUpdate
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -19,6 +21,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
 import com.onepage.companion.BuildConfig
 import com.onepage.companion.ui.SessionUiState
+import com.onepage.companion.ui.components.ActionRow
 import com.onepage.companion.ui.components.Hairline
 import com.onepage.companion.ui.components.InfoLine
 import com.onepage.companion.ui.components.OnePageCard
@@ -78,7 +81,10 @@ fun DeviceInfoScreen(state: SessionUiState, onBack: () -> Unit) {
 }
 
 @Composable
-fun AboutScreen(onBack: () -> Unit) {
+fun AboutScreen(
+    onBack: () -> Unit,
+    onOpenUpdate: (() -> Unit)? = null,
+) {
     val c = onePageColors
 
     Column(
@@ -116,6 +122,17 @@ fun AboutScreen(onBack: () -> Unit) {
         }
 
         Spacer(Modifier.height(18.dp))
+        if (onOpenUpdate != null) {
+            OnePageCard(padding = 10.dp) {
+                ActionRow(
+                    icon = Icons.Rounded.SystemUpdate,
+                    title = "软件更新",
+                    subtitle = "检查新版本并下载安装包",
+                    onClick = onOpenUpdate,
+                )
+            }
+            Spacer(Modifier.height(12.dp))
+        }
         OnePageCard(padding = 18.dp) {
             Text("V1 的边界", style = MaterialTheme.typography.titleSmall, color = c.ink)
             Spacer(Modifier.height(8.dp))

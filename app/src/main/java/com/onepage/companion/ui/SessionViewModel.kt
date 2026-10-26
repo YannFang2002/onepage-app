@@ -11,7 +11,10 @@ import com.onepage.companion.core.model.DiscoveredDevice
 import com.onepage.companion.core.model.SavedDevice
 import com.onepage.companion.core.net.DeviceApi
 import com.onepage.companion.core.net.Discovery
+import com.onepage.companion.core.net.WifiJoinFailure
+import com.onepage.companion.core.net.WifiJoinResult
 import com.onepage.companion.core.net.WifiJoiner
+import com.onepage.companion.core.net.wifiJoinMessage
 import com.onepage.companion.core.qr.QrPayloadParser
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -22,8 +25,17 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import java.io.IOException
+import java.util.concurrent.TimeUnit
 
 enum class Phase { Idle, Connecting, Connected, Failed }
+
+/** Set when the reader's hotspot could not be joined automatically. */
+data class ManualJoinHint(
+    val ssid: String,
+    val failure: WifiJoinFailure?,
+    /** True when granting a runtime permission is what unblocks the join. */
+    val needsPermission: Boolean,
+)
 
 data class SessionUiState(
     val phase: Phase = Phase.Idle,
@@ -35,6 +47,7 @@ data class SessionUiState(
     val scanning: Boolean = false,
     val connectingLabel: String? = null,
     val lastRefreshedAt: Long = 0L,
+    val manualJoin: ManualJoinHint? = null,
 )
 
 class SessionViewModel(app: Application) : AndroidViewModel(app) {
@@ -51,6 +64,7 @@ class SessionViewModel(app: Application) : AndroidViewModel(app) {
     val state: StateFlow<SessionUiState> = _state.asStateFlow()
 
     private var pollJob: Job? = null
+    private var manualJoinJob: Job? = null
 
     fun scan() {
         if (_state.value.scanning) return
@@ -72,8 +86,16 @@ class SessionViewModel(app: Application) : AndroidViewModel(app) {
     ) {
         val cleanHost = host.trim().removePrefix("http://").removePrefix("https://").substringBefore('/')
         if (cleanHost.isBlank()) return
+        cancelManualJoinWatch()
         viewModelScope.launch {
-            _state.update { it.copy(phase = Phase.Connecting, connectingLabel = "正在连接设备…", error = null) }
+            _state.update {
+                it.copy(
+                    phase = Phase.Connecting,
+                    connectingLabel = "正在连接设备…",
+                    error = null,
+                    manualJoin = null,
+                )
+            }
             connectInternal(cleanHost, port, wsPort, name, remember)
         }
     }
@@ -99,27 +121,85 @@ class SessionViewModel(app: Application) : AndroidViewModel(app) {
                     phase = Phase.Connecting,
                     connectingLabel = "正在加入「${wifi.ssid}」…",
                     error = null,
+                    manualJoin = null,
                 )
             }
             val result = runCatching {
                 joiner.join(wifi.ssid, wifi.password, wpa3 = wifi.security.equals("SAE", true))
-            }.getOrDefault(WifiJoiner.JoinResult(null, false))
+            }.getOrElse { WifiJoinResult(failure = WifiJoinFailure.Error, detail = it.message) }
 
             if (!result.joined) {
                 _state.update {
                     it.copy(
                         phase = Phase.Failed,
                         connectingLabel = null,
-                        error = "没能加入「${wifi.ssid}」。请在系统 Wi-Fi 列表里选中它，或再扫一次码。",
+                        error = wifiJoinMessage(wifi.ssid, result.failure, result.detail),
+                        manualJoin = ManualJoinHint(
+                            ssid = wifi.ssid,
+                            failure = result.failure,
+                            needsPermission = !joiner.hasPermission(),
+                        ),
                     )
                 }
+                watchForManualJoin()
                 return@launch
             }
 
             val host = result.gateway ?: WifiJoiner.DEFAULT_AP_ADDRESS
             _state.update { it.copy(connectingLabel = "已连上热点，正在访问 $host…") }
-            connectInternal(host, 80, Discovery.DEFAULT_WS_PORT, name = null, remember = true)
+            if (!connectInternal(host, 80, Discovery.DEFAULT_WS_PORT, name = null, remember = true)) {
+                // Some ROMs report the open network as available but keep routing
+                // traffic elsewhere (or the AP's DHCP is late). Keep probing that
+                // address; a manual tap in the Wi-Fi list is the other way out.
+                _state.update {
+                    it.copy(
+                        phase = Phase.Failed,
+                        connectingLabel = null,
+                        error = "已加入「${wifi.ssid}」，但访问不到 $host。App 会自动重试，也可以到 Wi-Fi 列表里手动确认一次。",
+                        manualJoin = ManualJoinHint(wifi.ssid, WifiJoinFailure.Error, needsPermission = false),
+                    )
+                }
+                watchForManualJoin(host)
+            }
         }
+    }
+
+    /**
+     * The system sheet is the only path on Android 10+, and some ROMs drop it for
+     * open networks. When it fails we send the user to the Wi-Fi list, but keep
+     * probing the reader's AP so the app finishes the connection by itself once
+     * they tap the network — no second QR scan needed.
+     */
+    private fun watchForManualJoin(host: String = WifiJoiner.DEFAULT_AP_ADDRESS) {
+        manualJoinJob?.cancel()
+        manualJoinJob = viewModelScope.launch {
+            val probeClient = http.newBuilder()
+                .connectTimeout(1, TimeUnit.SECONDS)
+                .readTimeout(2, TimeUnit.SECONDS)
+                .build()
+            val probe = DeviceApi(probeClient, host, 80, Discovery.DEFAULT_WS_PORT)
+            repeat(MANUAL_JOIN_PROBES) {
+                delay(MANUAL_JOIN_INTERVAL_MS)
+                if (!isActive) return@launch
+                if (runCatching { probe.status() }.isSuccess) {
+                    _state.update {
+                        it.copy(
+                            phase = Phase.Connecting,
+                            connectingLabel = "已连上热点，正在访问 $host…",
+                            error = null,
+                            manualJoin = null,
+                        )
+                    }
+                    connectInternal(host, 80, Discovery.DEFAULT_WS_PORT, name = null, remember = true)
+                    return@launch
+                }
+            }
+        }
+    }
+
+    private fun cancelManualJoinWatch() {
+        manualJoinJob?.cancel()
+        manualJoinJob = null
     }
 
     private suspend fun connectInternal(
@@ -128,9 +208,9 @@ class SessionViewModel(app: Application) : AndroidViewModel(app) {
         wsPort: Int,
         name: String?,
         remember: Boolean,
-    ) {
+    ): Boolean {
         val candidate = DeviceApi(http, cleanHost, port, wsPort)
-        try {
+        return try {
             val status = candidate.status()
             api = candidate
             val saved = SavedDevice(
@@ -156,6 +236,7 @@ class SessionViewModel(app: Application) : AndroidViewModel(app) {
                 )
             }
             startPolling()
+            true
         } catch (t: Throwable) {
             api = null
             _state.update {
@@ -166,6 +247,7 @@ class SessionViewModel(app: Application) : AndroidViewModel(app) {
                     status = null,
                 )
             }
+            false
         }
     }
 
@@ -178,10 +260,18 @@ class SessionViewModel(app: Application) : AndroidViewModel(app) {
     fun disconnect() {
         pollJob?.cancel()
         pollJob = null
+        cancelManualJoinWatch()
         api = null
         joiner.release()
         _state.update {
-            it.copy(phase = Phase.Idle, device = null, status = null, error = null, connectingLabel = null)
+            it.copy(
+                phase = Phase.Idle,
+                device = null,
+                status = null,
+                error = null,
+                connectingLabel = null,
+                manualJoin = null,
+            )
         }
     }
 
@@ -240,5 +330,11 @@ class SessionViewModel(app: Application) : AndroidViewModel(app) {
         is java.net.UnknownHostException -> "找不到该地址"
         is IOException -> "网络不可达：${t.message ?: "请检查 Wi-Fi"}"
         else -> t.message ?: t::class.java.simpleName
+    }
+
+    private companion object {
+        /** 2 s × 45 = 90 s of watching for the user to finish the manual join. */
+        const val MANUAL_JOIN_PROBES = 45
+        const val MANUAL_JOIN_INTERVAL_MS = 2_000L
     }
 }

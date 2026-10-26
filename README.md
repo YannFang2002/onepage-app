@@ -23,7 +23,7 @@ Android 手机端伴侣应用：连接 OnePage 阅读器，改设置、管文件
 
 | 模块 | 能力 |
 |---|---|
-| 连接 | **扫码连接**（Wi-Fi 码自动加入热点 / 网址码直接连）、UDP 广播自动发现、手动输入 IP、保存多台设备、重命名、断开 |
+| 连接 | **扫码连接**（Wi-Fi 码自动加入热点 / 网址码直接连）、UDP 广播自动发现、手动输入 IP、保存多台设备、重命名、断开；未连设备也能看「关于与更新」 |
 | 设备 | 版本 / 型号 / IP / 模式 / 信号 / 空闲内存 / 运行时长，每 6 秒刷新 |
 | 设置 | 设备返回的 schema 驱动，共 4 大类 50 项：开关、枚举、滑杆、文本；改动即写回，失败回滚 |
 | 文件 | 浏览、上传（WebSocket 分片 + 进度）、下载、新建目录、重命名、移动、删除 |
@@ -40,7 +40,7 @@ Android 手机端伴侣应用：连接 OnePage 阅读器，改设置、管文件
 # 需要 JDK 17 + Android SDK 34
 ./gradlew assembleDebug      # 调试包
 ./gradlew assembleRelease    # 正式包（需先配置签名，见下）
-./gradlew testDebugUnitTest  # 单元测试（48 个用例，无需设备）
+./gradlew testDebugUnitTest  # 单元测试（54 个用例，无需设备）
 ./gradlew updateDebugScreenshotTest   # 生成 Preview 截图，逐屏视觉验收
 ```
 
@@ -57,6 +57,7 @@ Android 手机端伴侣应用：连接 OnePage 阅读器，改设置、管文件
 - `QrPayloadParserTest`（JVM，8 例）：扫码连接的三种载荷（Wi-Fi 码 / 网址码 / 裸 IP）与脏码拒绝。
 - `ReleaseParserTest`（JVM，11 例）：GitHub / Gitee 两种「最新 Release」响应的解析、APK 资产挑选、tag 装饰（`v` / `release-` / `-beta`）与版本比较、日期与说明截断。
 - `UpdateApiTest`（JVM + MockWebServer，5 例）：镜像优先级（Gitee → GitHub）、单个镜像失败时的兜底、全部失败时的合并报错、限流识别。
+- `WifiJoinTest`（JVM，6 例）：加入热点失败的五种原因对应的中文提示——每条都要点名 SSID 并指向手动入口（开放网络没有一次性成功时，用户唯一能走通的路）。
 - `updateDebugScreenshotTest`：11 张 Preview 截图（含深色模式），作为 UI 回归基线。
 
 ## 检查更新
@@ -139,3 +140,4 @@ app/src/main/java/com/onepage/companion/
 - 下载不支持断点续传，大文件失败需重下。
 - 设置项名称由设备按自身语言返回，App 直接展示。
 - 更新只负责“发现 + 跳转下载”，不代装 APK；Gitee 镜像与 Release 需手动同步。
+- 自动加入开放热点受系统限制（Android 10+ 只能走 `WifiNetworkSpecifier` 的系统弹窗）：失败时 App 给出手动入口，并在用户连上热点后自动继续连接设备。
