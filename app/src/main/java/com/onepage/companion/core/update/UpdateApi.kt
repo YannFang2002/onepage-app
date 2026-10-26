@@ -142,7 +142,13 @@ class UpdateApi(
                     )
                 )
             }
-            return ReleaseParser.parse(body, fallbackPageUrl = source.releasesPageUrl)
+            val release = ReleaseParser.parse(body)
+            // Gitee omits html_url; point the browser button at the tag page.
+            return if (release.pageUrl.isBlank()) {
+                release.copy(pageUrl = source.releasePageUrl(release.tag))
+            } else {
+                release
+            }
         }
     }
 

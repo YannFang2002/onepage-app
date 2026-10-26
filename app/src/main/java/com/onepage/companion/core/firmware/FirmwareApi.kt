@@ -118,7 +118,12 @@ class FirmwareApi(
             if (!response.isSuccessful) {
                 throw FirmwareException(httpMessage(response.code, body))
             }
-            return FirmwareParser.parse(body, fallbackPageUrl = source.releasesPageUrl)
+            val release = FirmwareParser.parse(body)
+            return if (release.pageUrl.isBlank()) {
+                release.copy(pageUrl = source.releasePageUrl(release.tag))
+            } else {
+                release
+            }
         }
     }
 

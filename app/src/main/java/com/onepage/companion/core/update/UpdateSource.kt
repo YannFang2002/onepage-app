@@ -41,6 +41,9 @@ enum class UpdateSource(
             GitHub -> "GitHub Releases"
         }
 
+    /** Release page for one tag; Gitee payloads omit `html_url`, so we build it. */
+    fun releasePageUrl(tag: String): String = "$repoUrl/releases/tag/$tag"
+
     companion object {
         /** Order matters: first reachable mirror wins. */
         val byPreference: List<UpdateSource> = listOf(Gitee, GitHub)

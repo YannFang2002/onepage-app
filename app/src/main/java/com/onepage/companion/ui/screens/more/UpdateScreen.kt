@@ -208,7 +208,9 @@ private fun AvailableCard(
             InfoLine("发布日期", release.publishedDate)
         }
         if (apk != null) {
-            InfoLine("安装包", "${apk.name} · ${formatSize(apk.size)}")
+            // Gitee omits the size in release payloads; don't print a bogus "0 B".
+            val sizeLabel = if (apk.size > 0) " · ${formatSize(apk.size)}" else ""
+            InfoLine("安装包", "${apk.name}$sizeLabel")
         }
 
         if (release.notes.isNotBlank()) {

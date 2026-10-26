@@ -39,6 +39,9 @@ enum class FirmwareSource(
             GitHub -> "GitHub Releases"
         }
 
+    /** Release page for one tag; Gitee payloads omit `html_url`, so we build it. */
+    fun releasePageUrl(tag: String): String = "$repoUrl/releases/tag/$tag"
+
     companion object {
         val byPreference: List<FirmwareSource> = listOf(Gitee, GitHub)
     }

@@ -127,6 +127,23 @@ class UpdateApiTest {
     }
 
     @Test
+    fun `gitee payload without html_url gets a tag specific release page`() = runBlocking {
+        // Real Gitee latest-release payloads leave html_url empty, so the
+        // "open in browser" button has to be built from owner/repo/tag.
+        enqueue(
+            200,
+            """{"tag_name":"v1.0.4","name":"v1.0.4","assets":[{"name":"OnePage-1.0.4.apk","browser_download_url":"https://gitee.com/x/y.apk"}]}""",
+        )
+
+        val result = api().latest()
+
+        assertEquals(
+            "https://gitee.com/Yann_Fang/onepage-app/releases/tag/v1.0.4",
+            result.release.pageUrl,
+        )
+    }
+
+    @Test
     fun `apk download verifies the digest published by the release`() = runBlocking {
         val bytes = ByteArray(300 * 1024) { (it % 251).toByte() }
         server.enqueue(MockResponse().setResponseCode(200).setBody(Buffer().write(bytes)))
