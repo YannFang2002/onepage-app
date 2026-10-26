@@ -38,6 +38,9 @@ data class FirmwareUiState(
     val progressLabel: String = "",
     val error: String? = null,
     val checkedAt: Long = 0L,
+    /** Version / slot reported by the device after it booted the new image. */
+    val resultVersion: String = "",
+    val resultSlot: String = "",
 ) {
     val latestVersion: String? get() = release?.version
 
@@ -219,23 +222,38 @@ class FirmwareViewModel(
     }.getOrDefault(false)
 
     private suspend fun watchFlashing() {
-        var last: FirmwareOtaStatus? = null
         var misses = 0
+        var sawActivity = false
         repeat(FLASH_POLLS) {
             delay(FLASH_INTERVAL_MS)
             val status = runCatching { api.otaStatus() }.getOrNull()
             if (status == null) {
+                // The reader blocks its main loop while erasing/writing, then
+                // reboots; silence is expected once it has picked the image up.
                 misses++
-                // The reader reboots right after Done; a few dropped polls then
-                // mean it is rebooting rather than that the update failed.
-                if (last?.isDone == true || misses >= 3) {
-                    finishSuccessfully()
+                if (misses >= MISS_LIMIT && !sawActivity) {
+                    failWith("设备没有响应 OTA 状态查询，升级可能没有开始。请确认设备在线后重试。")
                     return
                 }
                 return@repeat
             }
             misses = 0
-            last = status
+            if (!status.stage.equals("Idle", ignoreCase = true)) sawActivity = true
+
+            if (status.isFailed) {
+                failWith(status.message.ifBlank { "设备写入固件失败" })
+                return
+            }
+            if (status.isDone || status.appliedAfterReboot) {
+                finishSuccessfully(status)
+                return
+            }
+            if (status.stage.equals("Idle", ignoreCase = true)) {
+                // Back online after the reboot but the result file was not read
+                // yet (or the device booted into another activity).
+                _state.update { it.copy(phase = FirmwarePhase.Flashing, progressLabel = "等待设备回报升级结果…") }
+                return@repeat
+            }
             val progress = if (status.percent in 1..100) status.percent / 100f else 0f
             _state.update {
                 it.copy(
@@ -244,37 +262,29 @@ class FirmwareViewModel(
                     progressLabel = stageLabel(status),
                 )
             }
-            if (status.isFailed) {
-                _state.update {
-                    it.copy(
-                        phase = FirmwarePhase.Failed,
-                        error = status.message.ifBlank { "设备写入固件失败" },
-                        progressLabel = "",
-                    )
-                }
-                return
-            }
-            if (status.isDone) {
-                finishSuccessfully()
-                return
-            }
         }
-        _state.update {
-            it.copy(
-                phase = FirmwarePhase.Failed,
-                error = "等待设备完成升级超时。设备可能仍在写入，请稍后在设备上确认版本。",
-                progressLabel = "",
-            )
-        }
+        failWith("等待设备完成升级超时。设备可能仍在写入，请稍后在设备上确认版本。")
     }
 
-    private fun finishSuccessfully() {
+    private fun finishSuccessfully(status: FirmwareOtaStatus? = null) {
         _state.update {
             it.copy(
                 phase = FirmwarePhase.Done,
                 progress = 1f,
                 progressLabel = "升级完成",
                 error = null,
+                resultVersion = status?.lastResultVersion.orEmpty(),
+                resultSlot = status?.lastResultSlot.orEmpty(),
+            )
+        }
+    }
+
+    private fun failWith(message: String) {
+        _state.update {
+            it.copy(
+                phase = FirmwarePhase.Failed,
+                error = message,
+                progressLabel = "",
             )
         }
     }
@@ -308,6 +318,9 @@ class FirmwareViewModel(
 
         /** 1.5 s × 120 = 3 minutes, roughly what a 5.7 MB image needs. */
         private const val FLASH_POLLS = 120
+
+        /** 30 s of unanswered polls before we call it "never started". */
+        private const val MISS_LIMIT = 20
 
         fun factory(api: DeviceApi, currentVersion: String) = viewModelFactory {
             initializer { FirmwareViewModel(OnePageApp.instance, api, currentVersion) }

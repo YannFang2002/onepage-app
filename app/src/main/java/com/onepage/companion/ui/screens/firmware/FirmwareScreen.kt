@@ -224,7 +224,12 @@ fun FirmwareContent(
                 Pill("升级完成", PillTone.Accent)
                 Spacer(Modifier.height(10.dp))
                 Text(
-                    "固件已写入，设备正在重启。重启后连接会短暂中断，回到设备页重新连接即可。",
+                    buildString {
+                        append("固件已写入")
+                        if (state.resultVersion.isNotBlank()) append("：${state.resultVersion}")
+                        if (state.resultSlot.isNotBlank()) append("（${state.resultSlot} 分区）")
+                        append("。设备正在重启，连接会短暂中断，回到设备页重新连接即可。")
+                    },
                     style = MaterialTheme.typography.bodyMedium,
                     color = c.ink2,
                 )

@@ -41,7 +41,7 @@ Android 手机端伴侣应用：连接 OnePage 阅读器，改设置、管文件
 # 需要 JDK 17 + Android SDK 34
 ./gradlew assembleDebug      # 调试包
 ./gradlew assembleRelease    # 正式包（需先配置签名，见下）
-./gradlew testDebugUnitTest  # 单元测试（72 个用例，无需设备）
+./gradlew testDebugUnitTest  # 单元测试（73 个用例，无需设备）
 ./gradlew updateDebugScreenshotTest   # 生成 Preview 截图，逐屏视觉验收
 ```
 
@@ -59,7 +59,7 @@ Android 手机端伴侣应用：连接 OnePage 阅读器，改设置、管文件
 - `ReleaseParserTest`（JVM，11 例）：GitHub / Gitee 两种「最新 Release」响应的解析、APK 资产挑选、tag 装饰（`v` / `release-` / `-beta`）与版本比较、日期与说明截断。
 - `UpdateApiTest`（JVM + MockWebServer，5 例）：镜像优先级（Gitee → GitHub）、单个镜像失败时的兜底、全部失败时的合并报错、限流识别。
 - `WifiJoinTest`（JVM，6 例）：加入热点失败的五种原因对应的中文提示——每条都要点名 SSID 并指向手动入口（开放网络没有一次性成功时，用户唯一能走通的路）。
-- `FirmwareParserTest`（JVM，9 例）：`onepage-hub` 前缀识别、Release 里 `firmware.bin` 的挑选（排除 0x0 整包）、tag 与设备版本号比较、`/api/ota/status` 解析。
+- `FirmwareParserTest`（JVM，10 例）：`onepage-hub` 前缀识别、Release 里 `firmware.bin` 的挑选（排除 0x0 整包）、tag 与设备版本号比较、`/api/ota/status` 解析（含重启后的 `lastResult`）。
 - `FirmwareApiTest`（JVM + MockWebServer，6 例）：固件镜像优先级与回退、下载落盘与进度、连接中断 / 长度不符时删文件并报错。
 - `updateDebugScreenshotTest`：11 张 Preview 截图（含深色模式），作为 UI 回归基线。
 

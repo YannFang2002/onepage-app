@@ -87,6 +87,21 @@ class FirmwareParserTest {
         assertEquals("写入固件", status.message)
         assertFalse(status.isDone)
         assertFalse(status.isFailed)
+        assertEquals(null, status.lastResultOk)
+        assertFalse(status.appliedAfterReboot)
+    }
+
+    @Test
+    fun `post reboot result proves the update applied`() {
+        // The firmware persists this file right before restarting, so it is the
+        // only trustworthy "it really booted" signal after the reboot.
+        val status = FirmwareParser.parseOtaStatus(
+            """{"stage":"Idle","percent":0,"received":0,"message":"","lastResult":{"ok":true,"version":"onepage-hub-0.2.2","slot":"app1"}}"""
+        )
+
+        assertTrue(status.appliedAfterReboot)
+        assertEquals("onepage-hub-0.2.2", status.lastResultVersion)
+        assertEquals("app1", status.lastResultSlot)
     }
 
     @Test

@@ -38,16 +38,29 @@ data class FirmwareRelease(
     val publishedDate: String get() = formatReleaseDate(publishedAt)
 }
 
-/** `GET /api/ota/status` on the reader. */
+/**
+ * `GET /api/ota/status` on the reader.
+ *
+ * After a successful flash the device reboots with a fresh server, so the final
+ * proof of success is not the in-RAM stage but `lastResult`, which the firmware
+ * persists as `/system/.crosspoint/ota_result.json` right before restarting:
+ * `{"ok":true,"version":"onepage-hub-0.2.2","slot":"app1"}`.
+ */
 data class FirmwareOtaStatus(
     val stage: String,
     val percent: Int = 0,
     val received: Long = 0,
     val message: String = "",
+    val lastResultOk: Boolean? = null,
+    val lastResultVersion: String = "",
+    val lastResultSlot: String = "",
 ) {
     val isDone: Boolean get() = stage.equals("Done", ignoreCase = true)
     val isFailed: Boolean get() = stage.equals("Failed", ignoreCase = true)
     val isFinished: Boolean get() = isDone || isFailed
+
+    /** True when the device already rebooted into the new image. */
+    val appliedAfterReboot: Boolean get() = lastResultOk == true
 }
 
 class FirmwareException(message: String, cause: Throwable? = null) : Exception(message, cause)
@@ -76,18 +89,22 @@ object FirmwareParser {
         )
     }
 
-    /** Parses `{stage,percent,received,message}` from `/api/ota/status`. */
+    /** Parses `{stage,percent,received,message,lastResult}` from `/api/ota/status`. */
     fun parseOtaStatus(json: String): FirmwareOtaStatus {
         val root = try {
             JSONObject(json)
         } catch (e: JSONException) {
             throw FirmwareException("无法解析设备的 OTA 状态", e)
         }
+        val last = root.optJSONObject("lastResult")
         return FirmwareOtaStatus(
             stage = root.optString("stage").trim().ifBlank { "Idle" },
             percent = root.optInt("percent").coerceIn(0, 100),
             received = root.optLong("received").coerceAtLeast(0),
             message = root.optString("message").trim(),
+            lastResultOk = last?.let { if (it.has("ok")) it.optBoolean("ok") else null },
+            lastResultVersion = last?.optString("version").orEmpty().trim(),
+            lastResultSlot = last?.optString("slot").orEmpty().trim(),
         )
     }
 
