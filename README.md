@@ -31,6 +31,7 @@ Android 手机端伴侣应用：连接 OnePage 阅读器，改设置、管文件
 | OPDS | 订阅源增删 |
 | Wi-Fi | 设备保存的 SSID 增删（密码只写不读） |
 | 更新 | **进应用即检查**新版本（Gitee 镜像优先、GitHub 兜底），弹窗提示 + 更新说明，跳转浏览器下载 APK |
+| 固件 | 仅 `onepage-hub-*` 固件：从同一套镜像拉 `firmware.bin`，推送到设备 `/api/ota`，显示下载 / 上传 / 写入进度，设备自行重启 |
 
 不做：BLE 直连（固件无 GATT 服务）、手机端刷机、阅读进度同步。
 
@@ -40,7 +41,7 @@ Android 手机端伴侣应用：连接 OnePage 阅读器，改设置、管文件
 # 需要 JDK 17 + Android SDK 34
 ./gradlew assembleDebug      # 调试包
 ./gradlew assembleRelease    # 正式包（需先配置签名，见下）
-./gradlew testDebugUnitTest  # 单元测试（54 个用例，无需设备）
+./gradlew testDebugUnitTest  # 单元测试（72 个用例，无需设备）
 ./gradlew updateDebugScreenshotTest   # 生成 Preview 截图，逐屏视觉验收
 ```
 
@@ -53,11 +54,13 @@ Android 手机端伴侣应用：连接 OnePage 阅读器，改设置、管文件
 ## 测试
 
 - `ParsersTest`（JVM，13 例）：用固件真实 JSON 形状验证 status / settings（四种类型）/ files / fonts / opds / wifi / UDP 发现应答的解析，含缺字段、布尔值、字符串数字、脏数据等边界。
-- `DeviceApiTest`（JVM + MockWebServer，11 例）：验证发出去的真实 HTTP 请求——路径、query 编码、表单字段名、JSON body、Content-Type、multipart 字段、错误码映射（含设备纯文本 / JSON 两种错误格式）。
+- `DeviceApiTest`（JVM + MockWebServer，14 例）：验证发出去的真实 HTTP 请求——路径、query 编码、表单字段名、JSON body、Content-Type、multipart 字段、OTA 上传与状态、错误码映射（含设备纯文本 / JSON 两种错误格式）。
 - `QrPayloadParserTest`（JVM，8 例）：扫码连接的三种载荷（Wi-Fi 码 / 网址码 / 裸 IP）与脏码拒绝。
 - `ReleaseParserTest`（JVM，11 例）：GitHub / Gitee 两种「最新 Release」响应的解析、APK 资产挑选、tag 装饰（`v` / `release-` / `-beta`）与版本比较、日期与说明截断。
 - `UpdateApiTest`（JVM + MockWebServer，5 例）：镜像优先级（Gitee → GitHub）、单个镜像失败时的兜底、全部失败时的合并报错、限流识别。
 - `WifiJoinTest`（JVM，6 例）：加入热点失败的五种原因对应的中文提示——每条都要点名 SSID 并指向手动入口（开放网络没有一次性成功时，用户唯一能走通的路）。
+- `FirmwareParserTest`（JVM，9 例）：`onepage-hub` 前缀识别、Release 里 `firmware.bin` 的挑选（排除 0x0 整包）、tag 与设备版本号比较、`/api/ota/status` 解析。
+- `FirmwareApiTest`（JVM + MockWebServer，6 例）：固件镜像优先级与回退、下载落盘与进度、连接中断 / 长度不符时删文件并报错。
 - `updateDebugScreenshotTest`：11 张 Preview 截图（含深色模式），作为 UI 回归基线。
 
 ## 检查更新
@@ -125,6 +128,7 @@ app/src/main/java/com/onepage/companion/
 ├─ core/model/     数据模型（status / settings / files / fonts / opds / wifi）
 ├─ core/net/       DeviceApi（OkHttp）、WsUploader（上传状态机）、Discovery（UDP）
 ├─ core/update/    更新源（Gitee / GitHub）、Release 解析、版本比较、UpdateApi
+├─ core/firmware/  固件 OTA：onepage-hub 识别、firmware.bin 下载、/api/ota 推送
 ├─ core/data/      DeviceStore（已保存设备）
 ├─ ui/theme/       调色板、字体阶梯、形状
 ├─ ui/components/  卡片、按钮、输入框、弹层、进度条
@@ -141,3 +145,4 @@ app/src/main/java/com/onepage/companion/
 - 设置项名称由设备按自身语言返回，App 直接展示。
 - 更新只负责“发现 + 跳转下载”，不代装 APK；Gitee 镜像与 Release 需手动同步。
 - 自动加入开放热点受系统限制（Android 10+ 只能走 `WifiNetworkSpecifier` 的系统弹窗）：失败时 App 给出手动入口，并在用户连上热点后自动继续连接设备。
+- 固件 OTA 只对 `onepage-hub-*` 固件开放：其它固件没有 `/api/ota`，页面会明确说明。升级期间设备会重启，连接会中断一次。

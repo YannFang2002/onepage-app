@@ -1,5 +1,7 @@
 package com.onepage.companion.core.net
 
+import com.onepage.companion.core.firmware.FirmwareOtaStatus
+import com.onepage.companion.core.firmware.FirmwareParser
 import com.onepage.companion.core.model.ApiException
 import com.onepage.companion.core.model.DeviceStatus
 import com.onepage.companion.core.model.FileEntry
@@ -17,8 +19,12 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.MultipartBody
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.RequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
+import okio.Buffer
+import okio.BufferedSink
+import okio.source
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -180,6 +186,69 @@ class DeviceApi(
     suspend fun deleteWifi(index: Int) = withContext(Dispatchers.IO) {
         postRaw("/api/wifi/delete", JSONObject().put("index", index).toString(), jsonMedia)
     }
+
+    // ------------------------------------------------------------------- ota
+
+    /** `GET /api/ota/status` — stage/percent of the reader's firmware update. */
+    suspend fun otaStatus(): FirmwareOtaStatus = withContext(Dispatchers.IO) {
+        FirmwareParser.parseOtaStatus(
+            getRaw("/api/ota/status", timeoutMs = 8_000),
+        )
+    }
+
+    /**
+     * `POST /api/ota` (multipart part named `firmware`).
+     *
+     * The reader writes the image to the SD card, validates it, flashes the next
+     * OTA slot and reboots a few seconds later, so callers should keep polling
+     * [otaStatus] instead of trusting this response.
+     */
+    suspend fun uploadFirmware(file: File, onProgress: (Long, Long) -> Unit = { _, _ -> }): String =
+        withContext(Dispatchers.IO) {
+            val total = file.length()
+            val body = object : RequestBody() {
+                override fun contentType() = "application/octet-stream".toMediaType()
+
+                override fun contentLength() = total
+
+                override fun writeTo(sink: BufferedSink) {
+                    file.source().use { source ->
+                        val buffer = Buffer()
+                        var sent = 0L
+                        var lastReport = 0L
+                        while (true) {
+                            val read = source.read(buffer, 64 * 1024)
+                            if (read == -1L) break
+                            sink.write(buffer, read)
+                            sent += read
+                            if (sent - lastReport >= 256 * 1024) {
+                                lastReport = sent
+                                onProgress(sent, total)
+                            }
+                        }
+                        onProgress(sent, total)
+                    }
+                }
+            }
+            val multipart = MultipartBody.Builder()
+                .setType(MultipartBody.FORM)
+                .addFormDataPart("firmware", file.name, body)
+                .build()
+            val request = Request.Builder().url("$baseUrl/api/ota").post(multipart).build()
+            val call = client.newBuilder()
+                .callTimeout(10, java.util.concurrent.TimeUnit.MINUTES)
+                .writeTimeout(0, java.util.concurrent.TimeUnit.SECONDS)
+                .build()
+                .newCall(request)
+            call.execute().use { resp ->
+                val text = resp.body?.string().orEmpty()
+                if (resp.code == 401) {
+                    throw ApiException(401, "设备要求 OTA 密码，暂不支持在 App 内配置")
+                }
+                if (!resp.isSuccessful) throw ApiException(resp.code, friendly(text, resp.code))
+                return@use text
+            }
+        }
 
     // --------------------------------------------------------------- plumbing
 

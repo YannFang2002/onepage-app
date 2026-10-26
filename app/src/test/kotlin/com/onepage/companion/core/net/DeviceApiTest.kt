@@ -13,6 +13,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
 import org.junit.Before
 import org.junit.Test
+import java.io.File
 
 /**
  * Client-side contract tests: asserts the exact requests the firmware's
@@ -207,6 +208,52 @@ class DeviceApiTest {
             fail("expected ApiException")
         } catch (e: ApiException) {
             assertEquals("Invalid .cpfont file", e.message)
+        }
+    }
+
+    @Test
+    fun `ota status is read from the device`() = runBlocking {
+        enqueueJson("""{"stage":"Writing","percent":37,"received":2000000,"message":"写入固件","lastResult":null}""")
+
+        val status = api.otaStatus()
+
+        assertEquals("/api/ota/status", server.takeRequest().path)
+        assertEquals("Writing", status.stage)
+        assertEquals(37, status.percent)
+        assertEquals(2_000_000L, status.received)
+    }
+
+    @Test
+    fun `firmware upload posts the firmware part to api ota`() = runBlocking {
+        server.enqueue(MockResponse().setResponseCode(200).setBody("""{"ok":true}"""))
+        val firmware = File.createTempFile("firmware", ".bin").apply { writeBytes(ByteArray(2048)) }
+        var reportedTotal = 0L
+        try {
+            api.uploadFirmware(firmware) { _, total -> reportedTotal = total }
+
+            val request = server.takeRequest()
+            assertEquals("/api/ota", request.path)
+            assertEquals("POST", request.method)
+            assertTrue(request.getHeader("Content-Type")!!.startsWith("multipart/form-data"))
+            val body = request.body.readUtf8()
+            assertTrue(body.contains("name=\"firmware\""))
+            assertTrue(body.contains("filename=\"${firmware.name}\""))
+            assertEquals(firmware.length(), reportedTotal)
+        } finally {
+            firmware.delete()
+        }
+    }
+
+    @Test
+    fun `ota endpoint asking for a password is reported as such`() = runBlocking {
+        server.enqueue(MockResponse().setResponseCode(401))
+
+        try {
+            api.uploadFirmware(File.createTempFile("firmware", ".bin").apply { writeBytes(ByteArray(16)) })
+            fail("expected ApiException")
+        } catch (e: ApiException) {
+            assertEquals(401, e.statusCode)
+            assertTrue(e.message!!.contains("OTA 密码"))
         }
     }
 }

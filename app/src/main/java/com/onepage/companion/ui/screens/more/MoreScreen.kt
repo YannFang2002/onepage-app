@@ -24,6 +24,7 @@ import androidx.compose.material.icons.rounded.Memory
 import androidx.compose.material.icons.rounded.PowerSettingsNew
 import androidx.compose.material.icons.rounded.SystemUpdate
 import androidx.compose.material.icons.rounded.TextFields
+import androidx.compose.material.icons.rounded.Upgrade
 import androidx.compose.material.icons.rounded.Wifi
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -34,6 +35,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.onepage.companion.core.firmware.isHubFirmware
 import com.onepage.companion.core.net.DeviceApi
 import com.onepage.companion.ui.PageHeader
 import com.onepage.companion.ui.SessionUiState
@@ -43,9 +45,10 @@ import com.onepage.companion.ui.components.Hairline
 import com.onepage.companion.ui.components.OnePageCard
 import com.onepage.companion.ui.components.Pill
 import com.onepage.companion.ui.components.PillTone
+import com.onepage.companion.ui.screens.firmware.FirmwareScreen
 import com.onepage.companion.ui.theme.onePageColors
 
-private enum class MorePage { Root, Fonts, Opds, Wifi, Device, Update, About }
+private enum class MorePage { Root, Fonts, Opds, Wifi, Device, Firmware, Update, About }
 
 @Composable
 fun MoreScreen(
@@ -78,6 +81,11 @@ fun MoreScreen(
             MorePage.Opds -> OpdsScreen(api = api, onBack = { page = MorePage.Root })
             MorePage.Wifi -> WifiScreen(api = api, onBack = { page = MorePage.Root })
             MorePage.Device -> DeviceInfoScreen(state = state, onBack = { page = MorePage.Root })
+            MorePage.Firmware -> FirmwareScreen(
+                api = api,
+                currentVersion = state.status?.version.orEmpty(),
+                onBack = { page = MorePage.Root },
+            )
             MorePage.Update -> UpdateScreen(
                 state = updates,
                 onCheck = onCheckUpdate,
@@ -147,6 +155,15 @@ private fun MoreHome(
                 subtitle = "型号、固件、内存、网络",
                 onClick = { onOpen(MorePage.Device) },
             )
+            if (isHubFirmware(state.status?.version)) {
+                Hairline(inset = 10.dp)
+                ActionRow(
+                    icon = Icons.Rounded.Upgrade,
+                    title = "固件升级",
+                    subtitle = "${state.status?.version.orEmpty()} · OTA",
+                    onClick = { onOpen(MorePage.Firmware) },
+                )
+            }
         }
 
         Spacer(Modifier.height(18.dp))
