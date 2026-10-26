@@ -22,6 +22,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -30,12 +31,17 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.onepage.companion.core.update.notesPreview
 import com.onepage.companion.ui.MainShell
 import com.onepage.companion.ui.Phase
 import com.onepage.companion.ui.SessionViewModel
+import com.onepage.companion.ui.UpdateViewModel
+import com.onepage.companion.ui.components.ConfirmDialog
+import com.onepage.companion.ui.components.openUrl
 import com.onepage.companion.ui.screens.connect.ConnectScreen
 import com.onepage.companion.ui.screens.scan.QrScannerScreen
 import com.onepage.companion.ui.theme.OnePageTheme
@@ -62,10 +68,18 @@ class MainActivity : ComponentActivity() {
 @Composable
 private fun AppRoot() {
     val session: SessionViewModel = viewModel()
+    val updater: UpdateViewModel = viewModel()
     val state by session.state.collectAsStateWithLifecycle()
+    val updateState by updater.state.collectAsStateWithLifecycle()
     val api = session.api
     val connected = state.phase == Phase.Connected && api != null
     var scanning by rememberSaveable { mutableStateOf(false) }
+    var updatePromptDismissed by rememberSaveable { mutableStateOf(false) }
+    val context = LocalContext.current
+
+    // Check for a new APK as soon as the app opens; the result pops a dialog
+    // below but never blocks connecting to a reader.
+    LaunchedEffect(Unit) { updater.autoCheck() }
 
     AnimatedContent(
         targetState = connected,
@@ -76,6 +90,8 @@ private fun AppRoot() {
             MainShell(
                 api = api!!,
                 state = state,
+                updates = updateState,
+                onCheckUpdate = updater::check,
                 onDisconnect = session::disconnect,
                 onRefresh = session::refreshStatus,
                 onRename = { name ->
@@ -107,6 +123,27 @@ private fun AppRoot() {
 
     if (state.phase == Phase.Connecting) {
         ConnectingOverlay(label = state.connectingLabel)
+    }
+
+    val release = updateState.release
+    if (updateState.hasUpdate && release != null && !updatePromptDismissed && state.phase != Phase.Connecting) {
+        ConfirmDialog(
+            title = "发现新版本 ${release.tag}",
+            message = buildString {
+                append("当前 v${updateState.currentVersion}，${updateState.sourceLabel} 上已有 ${release.tag}。")
+                if (release.notes.isNotBlank()) {
+                    append("\n\n")
+                    append(notesPreview(release.notes, limit = 240))
+                }
+            },
+            confirmText = "前往下载",
+            dismissText = "稍后",
+            onConfirm = {
+                updatePromptDismissed = true
+                updateState.downloadUrl?.let { openUrl(context, it) }
+            },
+            onDismiss = { updatePromptDismissed = true },
+        )
     }
 }
 

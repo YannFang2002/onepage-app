@@ -22,6 +22,7 @@ import androidx.compose.material.icons.rounded.Cloud
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.Memory
 import androidx.compose.material.icons.rounded.PowerSettingsNew
+import androidx.compose.material.icons.rounded.SystemUpdate
 import androidx.compose.material.icons.rounded.TextFields
 import androidx.compose.material.icons.rounded.Wifi
 import androidx.compose.material3.MaterialTheme
@@ -36,17 +37,22 @@ import androidx.compose.ui.unit.dp
 import com.onepage.companion.core.net.DeviceApi
 import com.onepage.companion.ui.PageHeader
 import com.onepage.companion.ui.SessionUiState
+import com.onepage.companion.ui.UpdateUiState
 import com.onepage.companion.ui.components.ActionRow
 import com.onepage.companion.ui.components.Hairline
 import com.onepage.companion.ui.components.OnePageCard
+import com.onepage.companion.ui.components.Pill
+import com.onepage.companion.ui.components.PillTone
 import com.onepage.companion.ui.theme.onePageColors
 
-private enum class MorePage { Root, Fonts, Opds, Wifi, Device, About }
+private enum class MorePage { Root, Fonts, Opds, Wifi, Device, Update, About }
 
 @Composable
 fun MoreScreen(
     api: DeviceApi,
     state: SessionUiState,
+    updates: UpdateUiState,
+    onCheckUpdate: () -> Unit,
     onDisconnect: () -> Unit,
 ) {
     var page by remember { mutableStateOf(MorePage.Root) }
@@ -64,6 +70,7 @@ fun MoreScreen(
             MorePage.Root -> MoreHome(
                 api = api,
                 state = state,
+                updates = updates,
                 onOpen = { page = it },
                 onDisconnect = onDisconnect,
             )
@@ -71,6 +78,11 @@ fun MoreScreen(
             MorePage.Opds -> OpdsScreen(api = api, onBack = { page = MorePage.Root })
             MorePage.Wifi -> WifiScreen(api = api, onBack = { page = MorePage.Root })
             MorePage.Device -> DeviceInfoScreen(state = state, onBack = { page = MorePage.Root })
+            MorePage.Update -> UpdateScreen(
+                state = updates,
+                onCheck = onCheckUpdate,
+                onBack = { page = MorePage.Root },
+            )
             MorePage.About -> AboutScreen(onBack = { page = MorePage.Root })
         }
     }
@@ -80,6 +92,7 @@ fun MoreScreen(
 private fun MoreHome(
     api: DeviceApi,
     state: SessionUiState,
+    updates: UpdateUiState,
     onOpen: (MorePage) -> Unit,
     onDisconnect: () -> Unit,
 ) {
@@ -133,6 +146,23 @@ private fun MoreHome(
                 title = "设备信息",
                 subtitle = "型号、固件、内存、网络",
                 onClick = { onOpen(MorePage.Device) },
+            )
+        }
+
+        Spacer(Modifier.height(18.dp))
+        Text("应用", style = MaterialTheme.typography.labelMedium, color = c.ink3)
+        Spacer(Modifier.height(8.dp))
+        OnePageCard(padding = 10.dp) {
+            ActionRow(
+                icon = Icons.Rounded.SystemUpdate,
+                title = "软件更新",
+                subtitle = updates.summary,
+                onClick = { onOpen(MorePage.Update) },
+                trailing = if (updates.hasUpdate) {
+                    { Pill("有新版本", PillTone.Accent) }
+                } else {
+                    null
+                },
             )
             Hairline(inset = 10.dp)
             ActionRow(

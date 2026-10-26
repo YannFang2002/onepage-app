@@ -80,6 +80,7 @@ import com.onepage.companion.ui.components.PillTone
 import com.onepage.companion.ui.components.PrimaryButton
 import com.onepage.companion.ui.components.PromptDialog
 import com.onepage.companion.ui.components.SlimProgress
+import com.onepage.companion.ui.components.formatSize
 import com.onepage.companion.ui.theme.onePageColors
 import kotlinx.coroutines.launch
 import java.io.File
@@ -511,14 +512,4 @@ private fun shareFile(context: android.content.Context, file: File) {
         }
         context.startActivity(Intent.createChooser(intent, "打开或分享").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
     }
-}
-
-fun formatSize(bytes: Long): String {
-    if (bytes <= 0) return "0 B"
-    val kb = bytes / 1024.0
-    if (kb < 1) return "$bytes B"
-    val mb = kb / 1024.0
-    if (mb < 1) return String.format("%.0f KB", kb)
-    val gb = mb / 1024.0
-    return if (gb < 1) String.format("%.1f MB", mb) else String.format("%.2f GB", gb)
 }

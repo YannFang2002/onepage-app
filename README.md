@@ -30,6 +30,7 @@ Android 手机端伴侣应用：连接 OnePage 阅读器，改设置、管文件
 | 字体 | 字体家族列表（字号 / 文件数 / 体积）、上传 `.cpfont`、删除家族 |
 | OPDS | 订阅源增删 |
 | Wi-Fi | 设备保存的 SSID 增删（密码只写不读） |
+| 更新 | **进应用即检查**新版本（Gitee 镜像优先、GitHub 兜底），弹窗提示 + 更新说明，跳转浏览器下载 APK |
 
 不做：BLE 直连（固件无 GATT 服务）、手机端刷机、阅读进度同步。
 
@@ -39,7 +40,7 @@ Android 手机端伴侣应用：连接 OnePage 阅读器，改设置、管文件
 # 需要 JDK 17 + Android SDK 34
 ./gradlew assembleDebug      # 调试包
 ./gradlew assembleRelease    # 正式包（需先配置签名，见下）
-./gradlew testDebugUnitTest  # 协议解析单元测试（13 个用例，无需设备）
+./gradlew testDebugUnitTest  # 单元测试（48 个用例，无需设备）
 ./gradlew updateDebugScreenshotTest   # 生成 Preview 截图，逐屏视觉验收
 ```
 
@@ -53,7 +54,30 @@ Android 手机端伴侣应用：连接 OnePage 阅读器，改设置、管文件
 
 - `ParsersTest`（JVM，13 例）：用固件真实 JSON 形状验证 status / settings（四种类型）/ files / fonts / opds / wifi / UDP 发现应答的解析，含缺字段、布尔值、字符串数字、脏数据等边界。
 - `DeviceApiTest`（JVM + MockWebServer，11 例）：验证发出去的真实 HTTP 请求——路径、query 编码、表单字段名、JSON body、Content-Type、multipart 字段、错误码映射（含设备纯文本 / JSON 两种错误格式）。
+- `QrPayloadParserTest`（JVM，8 例）：扫码连接的三种载荷（Wi-Fi 码 / 网址码 / 裸 IP）与脏码拒绝。
+- `ReleaseParserTest`（JVM，11 例）：GitHub / Gitee 两种「最新 Release」响应的解析、APK 资产挑选、tag 装饰（`v` / `release-` / `-beta`）与版本比较、日期与说明截断。
+- `UpdateApiTest`（JVM + MockWebServer，5 例）：镜像优先级（Gitee → GitHub）、单个镜像失败时的兜底、全部失败时的合并报错、限流识别。
 - `updateDebugScreenshotTest`：11 张 Preview 截图（含深色模式），作为 UI 回归基线。
+
+## 检查更新
+
+App 自己的更新走 Release 页面，不走应用商店：
+
+| 项 | 值 |
+|---|---|
+| 首选源 | Gitee 镜像 `https://gitee.com/Yann_Fang/onepage-app` → `GET /api/v5/repos/Yann_Fang/onepage-app/releases/latest` |
+| 兜底源 | GitHub `https://github.com/YannFang2002/onepage-app` → `GET /api.github.com/repos/YannFang2002/onepage-app/releases/latest` |
+| 时机 | **每次进应用**静默查一次（有新版就弹窗）+「更多 → 软件更新」手动重查 |
+| 比较 | `tag_name` 去掉 `v` / `release-` / `-beta` 装饰后，按数字段与 `BuildConfig.VERSION_NAME` 逐段比较；不解析 body、不依赖 `versionCode` |
+| 下载 | 取 Release 里第一个 `.apk` 资产，交给系统浏览器下载；**App 不申请「安装未知应用」权限**，不静默安装 |
+| 认证 | 不携带 token（公开仓库无需），限流时提示「接口限流，请稍后再试」 |
+
+两个源都不携带密钥，也不做签名校验；安装包的真伪靠 Android 自身的签名校验（覆盖升级必须同签名）。
+
+发布新版本时：`versionCode` +1、`versionName` 改成 `x.y.z`、打 tag `vx.y.z`、Release 附件命名
+`OnePage-x.y.z.apk`。Gitee 仓库是**手动同步**的镜像，改动源地址只需改
+`core/update/UpdateSource.kt` 一处。发布说明草稿（含包大小 / SHA-256 / 证书指纹）放在
+`docs/releases/`，可直接贴到两个镜像的 Release 里。
 
 ## 扫码连接
 
@@ -99,10 +123,12 @@ mock 服务复刻了固件的全部 JSON 形状（含 25 个设置项、文件�
 app/src/main/java/com/onepage/companion/
 ├─ core/model/     数据模型（status / settings / files / fonts / opds / wifi）
 ├─ core/net/       DeviceApi（OkHttp）、WsUploader（上传状态机）、Discovery（UDP）
+├─ core/update/    更新源（Gitee / GitHub）、Release 解析、版本比较、UpdateApi
 ├─ core/data/      DeviceStore（已保存设备）
 ├─ ui/theme/       调色板、字体阶梯、形状
 ├─ ui/components/  卡片、按钮、输入框、弹层、进度条
-├─ ui/screens/     connect / home / settings / files / more(fonts|opds|wifi|info)
+├─ ui/screens/     connect / home / settings / files / more(fonts|opds|wifi|info|update)
+├─ ui/UpdateViewModel  更新检查状态机（启动即查）
 └─ ui/MainShell    底部导航 + 页面切换
 ```
 
@@ -112,3 +138,4 @@ app/src/main/java/com/onepage/companion/
 - 设备退出网页服务会重启，连接会断，App 有 6 秒轮询与错误态提示。
 - 下载不支持断点续传，大文件失败需重下。
 - 设置项名称由设备按自身语言返回，App 直接展示。
+- 更新只负责“发现 + 跳转下载”，不代装 APK；Gitee 镜像与 Release 需手动同步。

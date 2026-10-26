@@ -64,6 +64,8 @@ private val tabs = listOf(
 fun MainShell(
     api: DeviceApi,
     state: SessionUiState,
+    updates: UpdateUiState,
+    onCheckUpdate: () -> Unit,
     onDisconnect: () -> Unit,
     onRefresh: () -> Unit,
     onRename: (String) -> Unit,
@@ -97,7 +99,13 @@ fun MainShell(
                 )
                 1 -> SettingsScreen(api = api)
                 2 -> FilesScreen(api = api)
-                else -> MoreScreen(api = api, state = state, onDisconnect = onDisconnect)
+                else -> MoreScreen(
+                    api = api,
+                    state = state,
+                    updates = updates,
+                    onCheckUpdate = onCheckUpdate,
+                    onDisconnect = onDisconnect,
+                )
             }
         }
 

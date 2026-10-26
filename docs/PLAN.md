@@ -199,6 +199,7 @@ onepage-app/
 | M4 | 字体 / OPDS / Wi-Fi 三页 | ✅ 完成 |
 | M5 | 深色模式、空态/错误态、断线重连、Preview 截图验收 | ✅ 完成 |
 | M6 | 签名打包、APK 输出到 `outputs`、README | ✅ 完成 |
+| M7 | v1.0.2 检查更新：Gitee 镜像优先 / GitHub 兜底，进应用即检查 | ✅ 完成 |
 
 **未做（明确留到 v2）**：热点一键加入的原生流程（当前引导用户到系统 Wi-Fi 设置）、断点续传、阅读进度、BLE。
 **验收方式**：本机无可用模拟器（缺硬件加速驱动），UI 通过 Compose Preview 截图测试（`gradlew updateDebugScreenshotTest`）逐屏渲染检查；功能路径对照固件源码静态核对 + `tools/mock-device` 可随时联调。
@@ -237,3 +238,13 @@ onepage-app/
 3. **技术栈**：Flutter 是否有异议（团队是否更熟 React/TS）？
 4. **固件改动窗口**：§9 的 1–3 项能否排进固件版本？能的话 App 可以做"配置备份/鉴权"，否则 v1 不做。
 5. **设备命名**：App 里显示 "OnePage" 还是 "CrossPoint"（当前固件 AP SSID 与 `/api/status` 里仍是 CrossPoint 字样）。
+
+---
+
+## 11. v1.0.2 追加：检查更新（已实施）
+
+- **数据源**：Gitee `Yann_Fang/onepage-app` 优先，GitHub `YannFang2002/onepage-app` 兜底；两者都读「latest release」，不带 token。Gitee 仓库为手动同步的镜像。
+- **时机**：`UpdateViewModel.autoCheck()` 在 `AppRoot` 首次组合时触发（每次进应用一次）；命中新版本先弹确认框，「更多 → 软件更新」可重查。
+- **判定**：`tag_name` 去掉 `v` / `release-` / `-beta` 装饰后，按数字段与 `BuildConfig.VERSION_NAME` 比较；不依赖 `versionCode`，也不用 release 说明做逻辑判断。
+- **下载**：只把 APK 的 `browser_download_url` 交给系统浏览器；不申请 `REQUEST_INSTALL_PACKAGES`，不静默安装，不为「省一步」牺牲合规与可追溯性。
+- **失败面**：两个源都失败时合并成一行中文错误，只显示在更新页；绝不打断「连接设备」主流程。

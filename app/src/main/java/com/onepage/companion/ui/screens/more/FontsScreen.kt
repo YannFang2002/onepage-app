@@ -50,7 +50,7 @@ import com.onepage.companion.ui.components.OnePageTextField
 import com.onepage.companion.ui.components.Pill
 import com.onepage.companion.ui.components.PillTone
 import com.onepage.companion.ui.components.PrimaryButton
-import com.onepage.companion.ui.screens.files.formatSize
+import com.onepage.companion.ui.components.formatSize
 import com.onepage.companion.ui.theme.onePageColors
 import kotlinx.coroutines.launch
 

@@ -286,3 +286,28 @@ fun InfoLine(
 fun AlphaBox(alpha: Float, content: @Composable () -> Unit) {
     Box(Modifier.alpha(alpha)) { content() }
 }
+
+/** Human readable byte size shared by the file list and the update screen. */
+fun formatSize(bytes: Long): String {
+    if (bytes <= 0) return "0 B"
+    val kb = bytes / 1024.0
+    if (kb < 1) return "$bytes B"
+    val mb = kb / 1024.0
+    if (mb < 1) return String.format("%.0f KB", kb)
+    val gb = mb / 1024.0
+    return if (gb < 1) String.format("%.1f MB", mb) else String.format("%.2f GB", gb)
+}
+
+/** Hands a URL to the browser / download manager; used by the update flow. */
+fun openUrl(context: android.content.Context, url: String) {
+    val launched = runCatching {
+        context.startActivity(
+            android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url))
+                .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+        )
+    }.isSuccess
+    if (!launched) {
+        android.widget.Toast.makeText(context, "没有可用的浏览器，请手动访问 $url", android.widget.Toast.LENGTH_LONG)
+            .show()
+    }
+}
