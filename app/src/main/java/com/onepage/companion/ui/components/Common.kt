@@ -346,3 +346,50 @@ fun openAppSettings(context: android.content.Context) {
         android.widget.Toast.makeText(context, "无法打开应用设置", android.widget.Toast.LENGTH_SHORT).show()
     }
 }
+
+/**
+ * Hands a downloaded APK to the system package installer through our
+ * FileProvider. Returns false when Android still needs the per-app
+ * "install unknown apps" grant — the user is sent straight to that switch and
+ * can retry from the update page afterwards.
+ */
+fun installApk(context: android.content.Context, file: java.io.File): Boolean {
+    if (!file.exists()) {
+        android.widget.Toast.makeText(context, "安装包已不存在，请重新下载", android.widget.Toast.LENGTH_LONG).show()
+        return false
+    }
+    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O &&
+        !context.packageManager.canRequestPackageInstalls()
+    ) {
+        android.widget.Toast.makeText(context, "请允许 OnePage 安装应用，然后返回重试", android.widget.Toast.LENGTH_LONG)
+            .show()
+        runCatching {
+            context.startActivity(
+                android.content.Intent(
+                    android.provider.Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                    android.net.Uri.parse("package:${context.packageName}"),
+                ).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+            )
+        }
+        return false
+    }
+    val launched = runCatching {
+        val uri = androidx.core.content.FileProvider.getUriForFile(
+            context,
+            "${context.packageName}.fileprovider",
+            file,
+        )
+        context.startActivity(
+            android.content.Intent(android.content.Intent.ACTION_VIEW)
+                .setDataAndType(uri, "application/vnd.android.package-archive")
+                .addFlags(
+                    android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION or
+                        android.content.Intent.FLAG_ACTIVITY_NEW_TASK
+                )
+        )
+    }.isSuccess
+    if (!launched) {
+        android.widget.Toast.makeText(context, "没有可用的安装器", android.widget.Toast.LENGTH_LONG).show()
+    }
+    return launched
+}

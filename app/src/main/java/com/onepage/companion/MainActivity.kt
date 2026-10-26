@@ -47,7 +47,7 @@ import com.onepage.companion.ui.SessionViewModel
 import com.onepage.companion.ui.UpdateUiState
 import com.onepage.companion.ui.UpdateViewModel
 import com.onepage.companion.ui.components.ConfirmDialog
-import com.onepage.companion.ui.components.openUrl
+import com.onepage.companion.ui.components.installApk
 import com.onepage.companion.ui.screens.connect.ConnectScreen
 import com.onepage.companion.ui.screens.more.AboutScreen
 import com.onepage.companion.ui.screens.more.UpdateScreen
@@ -113,6 +113,7 @@ private fun AppRoot() {
                 state = state,
                 updates = updateState,
                 onCheckUpdate = updater::check,
+                onDownloadUpdate = updater::download,
                 onDisconnect = session::disconnect,
                 onRefresh = session::refreshStatus,
                 onRename = { name ->
@@ -138,8 +139,16 @@ private fun AppRoot() {
             page = infoPage,
             updateState = updateState,
             onCheckUpdate = updater::check,
+            onDownloadUpdate = updater::download,
             onNavigate = { infoPage = it },
         )
+    }
+
+    // A downloaded APK is handed to the system installer as soon as it exists,
+    // so updating never leaves the app.
+    val downloadedApk = updateState.download.apk
+    LaunchedEffect(downloadedApk) {
+        if (downloadedApk != null) installApk(context, downloadedApk)
     }
 
     if (scanning) {
@@ -167,11 +176,12 @@ private fun AppRoot() {
                     append(notesPreview(release.notes, limit = 240))
                 }
             },
-            confirmText = "前往下载",
+            confirmText = "下载并安装",
             dismissText = "稍后",
             onConfirm = {
                 updatePromptDismissed = true
-                updateState.downloadUrl?.let { openUrl(context, it) }
+                infoPage = InfoPage.Update
+                updater.download()
             },
             onDismiss = { updatePromptDismissed = true },
         )
@@ -189,6 +199,7 @@ private fun InfoOverlay(
     page: InfoPage,
     updateState: UpdateUiState,
     onCheckUpdate: () -> Unit,
+    onDownloadUpdate: () -> Unit,
     onNavigate: (InfoPage) -> Unit,
 ) {
     Box(
@@ -213,6 +224,7 @@ private fun InfoOverlay(
                 InfoPage.Update -> UpdateScreen(
                     state = updateState,
                     onCheck = onCheckUpdate,
+                    onDownload = onDownloadUpdate,
                     onBack = { onNavigate(InfoPage.About) },
                 )
                 InfoPage.None -> Unit

@@ -5,6 +5,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import java.io.File
 import java.io.IOException
 import java.net.SocketTimeoutException
 import java.net.UnknownHostException
@@ -42,8 +43,84 @@ class UpdateApi(
         )
     }
 
-    private fun fetch(source: UpdateSource, url: String): AppRelease {
+    /**
+     * Streams the APK to [dest], checking the byte count and — when the release
+     * published one — the SHA-256 digest. A mismatch deletes the file so the
+     * package installer never sees a corrupted or tampered APK.
+     */
+    suspend fun download(
+        asset: ReleaseAsset,
+        dest: File,
+        onProgress: (written: Long, total: Long) -> Unit = { _, _ -> },
+    ): File = withContext(Dispatchers.IO) {
         val request = Request.Builder()
+            .url(asset.url)
+            .header("User-Agent", USER_AGENT)
+            .get()
+            .build()
+        val call = client.newBuilder()
+            .connectTimeout(20, TimeUnit.SECONDS)
+            .readTimeout(0, TimeUnit.SECONDS) // a few MB over a slow link
+            .build()
+            .newCall(request)
+        call.execute().use { response ->
+            if (!response.isSuccessful) {
+                throw UpdateException("下载安装包失败（HTTP ${response.code}）")
+            }
+            val body = response.body ?: throw UpdateException("安装包响应为空")
+            val total = body.contentLength().takeIf { it > 0 } ?: asset.size
+            dest.parentFile?.mkdirs()
+            var written = 0L
+            var lastReport = 0L
+            try {
+                body.byteStream().use { input ->
+                    dest.outputStream().use { out ->
+                        val buffer = ByteArray(64 * 1024)
+                        while (true) {
+                            val read = input.read(buffer)
+                            if (read <= 0) break
+                            out.write(buffer, 0, read)
+                            written += read
+                            if (written - lastReport >= 256 * 1024) {
+                                lastReport = written
+                                onProgress(written, total)
+                            }
+                        }
+                    }
+                }
+            } catch (e: IOException) {
+                dest.delete()
+                throw UpdateException("下载中断：${e.message ?: "连接被关闭"}", e)
+            }
+            onProgress(written, total)
+            if (total > 0 && written != total) {
+                dest.delete()
+                throw UpdateException("安装包不完整（$written / $total 字节）")
+            }
+            asset.sha256?.let { expected ->
+                if (!sha256Of(dest).equals(expected, ignoreCase = true)) {
+                    dest.delete()
+                    throw UpdateException("安装包校验失败（SHA-256 与 Release 不符）")
+                }
+            }
+            dest
+        }
+    }
+
+    private fun sha256Of(file: File): String {
+        val digest = java.security.MessageDigest.getInstance("SHA-256")
+        file.inputStream().use { input ->
+            val buffer = ByteArray(64 * 1024)
+            while (true) {
+                val read = input.read(buffer)
+                if (read <= 0) break
+                digest.update(buffer, 0, read)
+            }
+        }
+        return digest.digest().joinToString("") { "%02x".format(it) }
+    }
+
+    private fun fetch(source: UpdateSource, url: String): AppRelease {        val request = Request.Builder()
             .url(url)
             .header("Accept", "application/json")
             .header("X-GitHub-Api-Version", "2022-11-28")

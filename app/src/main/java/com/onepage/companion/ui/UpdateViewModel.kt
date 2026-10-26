@@ -22,6 +22,17 @@ import java.net.UnknownHostException
 
 enum class UpdatePhase { Idle, Checking, UpToDate, Available, Failed }
 
+/** In-app APK download, so installing never needs a browser round-trip. */
+data class UpdateDownload(
+    val running: Boolean = false,
+    val progress: Float = 0f,
+    val label: String = "",
+    val apk: java.io.File? = null,
+    val error: String? = null,
+) {
+    val ready: Boolean get() = apk != null
+}
+
 data class UpdateUiState(
     val phase: UpdatePhase = UpdatePhase.Idle,
     val currentVersion: String = BuildConfig.VERSION_NAME,
@@ -29,6 +40,7 @@ data class UpdateUiState(
     val source: UpdateSource? = null,
     val error: String? = null,
     val checkedAt: Long = 0L,
+    val download: UpdateDownload = UpdateDownload(),
 ) {
     val latestVersion: String? get() = release?.version
 
@@ -66,6 +78,7 @@ class UpdateViewModel(app: Application) : AndroidViewModel(app) {
     val state: StateFlow<UpdateUiState> = _state.asStateFlow()
 
     private var job: Job? = null
+    private var downloadJob: Job? = null
 
     /** Silent probe on launch; the shell turns [UpdatePhase.Available] into a prompt. */
     fun autoCheck() {
@@ -88,6 +101,12 @@ class UpdateViewModel(app: Application) : AndroidViewModel(app) {
                             source = result.source,
                             error = null,
                             checkedAt = System.currentTimeMillis(),
+                            // A different release invalidates a previously downloaded APK.
+                            download = if (it.release?.tag == result.release.tag) {
+                                it.download
+                            } else {
+                                UpdateDownload()
+                            },
                         )
                     }
                 }
@@ -110,4 +129,59 @@ class UpdateViewModel(app: Application) : AndroidViewModel(app) {
         is IOException -> "网络不可达：${t.message ?: "请检查网络"}"
         else -> t.message ?: t::class.java.simpleName
     }
+
+    /**
+     * Downloads the APK into the app cache and leaves it in
+     * [UpdateUiState.download]; the UI opens the system installer as soon as the
+     * file appears, so no browser is involved.
+     */
+    fun download() {
+        val release = _state.value.release ?: return
+        if (_state.value.download.running) return
+        val asset = release.apk
+        if (asset == null) {
+            _state.update {
+                it.copy(download = UpdateDownload(error = "这个发行版没有 APK 附件，请到 Release 页面手动下载"))
+            }
+            return
+        }
+        downloadJob?.cancel()
+        downloadJob = viewModelScope.launch {
+            val dir = java.io.File(getApplication<Application>().cacheDir, "updates").apply { mkdirs() }
+            dir.listFiles()?.forEach { stale -> runCatching { stale.delete() } }
+            val dest = java.io.File(dir, "OnePage-${release.version}.apk")
+            _state.update { it.copy(download = UpdateDownload(running = true, label = "正在下载安装包")) }
+            runCatching {
+                api.download(asset, dest) { written, total ->
+                    _state.update { s ->
+                        s.copy(
+                            download = s.download.copy(
+                                progress = fraction(written, total),
+                                label = "正在下载安装包 ${percent(written, total)}%",
+                            )
+                        )
+                    }
+                }
+            }.onSuccess { file ->
+                _state.update {
+                    it.copy(download = UpdateDownload(progress = 1f, label = "下载完成，正在打开安装器", apk = file))
+                }
+            }.onFailure { t ->
+                _state.update { it.copy(download = UpdateDownload(error = describe(t))) }
+            }
+        }
+    }
+
+    /** Clears only the error so the "下载并安装" button can be retried. */
+    fun dismissDownloadError() {
+        _state.update {
+            if (it.download.apk == null) it.copy(download = UpdateDownload()) else it
+        }
+    }
+
+    private fun fraction(value: Long, total: Long): Float =
+        if (total <= 0) 0f else (value.toFloat() / total).coerceIn(0f, 1f)
+
+    private fun percent(value: Long, total: Long): Int =
+        if (total <= 0) 0 else ((value * 100) / total).toInt().coerceIn(0, 100)
 }

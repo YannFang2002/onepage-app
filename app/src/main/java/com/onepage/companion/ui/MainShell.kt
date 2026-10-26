@@ -66,6 +66,7 @@ fun MainShell(
     state: SessionUiState,
     updates: UpdateUiState,
     onCheckUpdate: () -> Unit,
+    onDownloadUpdate: () -> Unit,
     onDisconnect: () -> Unit,
     onRefresh: () -> Unit,
     onRename: (String) -> Unit,
@@ -104,6 +105,7 @@ fun MainShell(
                     state = state,
                     updates = updates,
                     onCheckUpdate = onCheckUpdate,
+                    onDownloadUpdate = onDownloadUpdate,
                     onDisconnect = onDisconnect,
                 )
             }

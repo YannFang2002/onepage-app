@@ -12,6 +12,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Download
+import androidx.compose.material.icons.rounded.InstallMobile
 import androidx.compose.material.icons.rounded.OpenInNew
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material3.MaterialTheme
@@ -24,6 +25,7 @@ import androidx.compose.ui.unit.dp
 import com.onepage.companion.core.update.AppRelease
 import com.onepage.companion.core.update.UpdateSource
 import com.onepage.companion.core.update.notesPreview
+import com.onepage.companion.ui.UpdateDownload
 import com.onepage.companion.ui.UpdatePhase
 import com.onepage.companion.ui.UpdateUiState
 import com.onepage.companion.ui.components.Hairline
@@ -34,7 +36,9 @@ import com.onepage.companion.ui.components.Pill
 import com.onepage.companion.ui.components.PillTone
 import com.onepage.companion.ui.components.PrimaryButton
 import com.onepage.companion.ui.components.SecondaryButton
+import com.onepage.companion.ui.components.SlimProgress
 import com.onepage.companion.ui.components.formatSize
+import com.onepage.companion.ui.components.installApk
 import com.onepage.companion.ui.components.openUrl
 import com.onepage.companion.ui.theme.onePageColors
 import java.time.Instant
@@ -51,6 +55,7 @@ import java.time.format.DateTimeFormatter
 fun UpdateScreen(
     state: UpdateUiState,
     onCheck: () -> Unit,
+    onDownload: () -> Unit,
     onBack: () -> Unit,
 ) {
     val c = onePageColors
@@ -129,8 +134,14 @@ fun UpdateScreen(
                     AvailableCard(
                         release = release,
                         currentVersion = state.currentVersion,
+                        download = state.download,
                         fallbackUrl = state.downloadUrl ?: UpdateSource.GitHub.releasesPageUrl,
-                    ) { url -> openUrl(context, url) }
+                        onDownload = onDownload,
+                        onInstall = {
+                            state.download.apk?.let { installApk(context, it) }
+                        },
+                        onOpenUrl = { url -> openUrl(context, url) },
+                    )
                 } else {
                     IdleCard(onCheck = onCheck)
                 }
@@ -140,8 +151,8 @@ fun UpdateScreen(
         Spacer(Modifier.height(14.dp))
         Text(
             "更新信息优先读 Gitee 镜像（${UpdateSource.Gitee.repoUrl}），不可用时回退 GitHub（${UpdateSource.GitHub.repoUrl}）。"
-                + " 安装包由系统浏览器下载，App 不申请「安装未知应用」权限；"
-                + " 两个站点在部分网络下可能需要代理。",
+                + " 安装包由 App 下载并校验（Release 提供 SHA-256 时），再交给系统安装器；"
+                + " 首次安装需要在系统里允许 OnePage「安装未知应用」。",
             style = MaterialTheme.typography.bodySmall,
             color = c.ink3,
             modifier = Modifier
@@ -171,7 +182,10 @@ private fun IdleCard(onCheck: () -> Unit) {
 private fun AvailableCard(
     release: AppRelease,
     currentVersion: String,
+    download: UpdateDownload,
     fallbackUrl: String,
+    onDownload: () -> Unit,
+    onInstall: () -> Unit,
     onOpenUrl: (String) -> Unit,
 ) {
     val c = onePageColors
@@ -211,15 +225,70 @@ private fun AvailableCard(
         }
 
         Spacer(Modifier.height(18.dp))
-        PrimaryButton(
-            text = if (apk != null) "下载安装包" else "打开 Release 页面",
-            icon = Icons.Rounded.Download,
-            onClick = { onOpenUrl(apk?.url ?: release.pageUrl.ifBlank { fallbackUrl }) },
-        )
+
+        val downloaded = download.apk
+        when {
+            download.running -> {
+                Text(download.label, style = MaterialTheme.typography.bodyMedium, color = c.ink2)
+                Spacer(Modifier.height(10.dp))
+                SlimProgress(fraction = download.progress)
+                Spacer(Modifier.height(10.dp))
+                Text(
+                    "由 App 直接下载，完成后自动打开系统安装器。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = c.ink3,
+                )
+            }
+
+            downloaded != null -> {
+                Text(
+                    "安装包已下载：${downloaded.name}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = c.ink2,
+                )
+                Spacer(Modifier.height(12.dp))
+                PrimaryButton(
+                    text = "打开系统安装器",
+                    icon = Icons.Rounded.InstallMobile,
+                    onClick = onInstall,
+                )
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    "若提示「未知来源」被禁止，请在系统设置里允许 OnePage 安装应用，再回来点一次。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = c.ink3,
+                )
+            }
+
+            else -> {
+                if (apk != null) {
+                    PrimaryButton(
+                        text = "下载并安装",
+                        icon = Icons.Rounded.Download,
+                        onClick = onDownload,
+                    )
+                    if (!download.error.isNullOrBlank()) {
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            download.error,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = c.danger,
+                        )
+                    }
+                } else {
+                    PrimaryButton(
+                        text = "打开 Release 页面",
+                        icon = Icons.Rounded.Download,
+                        onClick = { onOpenUrl(release.pageUrl.ifBlank { fallbackUrl }) },
+                    )
+                }
+            }
+        }
+
         if (release.pageUrl.isNotBlank()) {
             Spacer(Modifier.height(10.dp))
             SecondaryButton(
-                text = "查看 Release 页面",
+                text = "在浏览器打开 Release 页面",
                 icon = Icons.Rounded.OpenInNew,
                 onClick = { onOpenUrl(release.pageUrl) },
             )

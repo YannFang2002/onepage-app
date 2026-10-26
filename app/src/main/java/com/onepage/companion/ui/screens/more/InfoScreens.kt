@@ -13,6 +13,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.SystemUpdate
+import androidx.compose.material.icons.rounded.Upgrade
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -20,6 +21,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
 import com.onepage.companion.BuildConfig
+import com.onepage.companion.core.firmware.isHubFirmware
 import com.onepage.companion.ui.SessionUiState
 import com.onepage.companion.ui.components.ActionRow
 import com.onepage.companion.ui.components.Hairline
@@ -28,9 +30,14 @@ import com.onepage.companion.ui.components.OnePageCard
 import com.onepage.companion.ui.theme.onePageColors
 
 @Composable
-fun DeviceInfoScreen(state: SessionUiState, onBack: () -> Unit) {
+fun DeviceInfoScreen(
+    state: SessionUiState,
+    onBack: () -> Unit,
+    onOpenFirmware: (() -> Unit)? = null,
+) {
     val c = onePageColors
     val status = state.status
+    val hubFirmware = isHubFirmware(status?.version)
 
     Column(
         Modifier
@@ -48,6 +55,18 @@ fun DeviceInfoScreen(state: SessionUiState, onBack: () -> Unit) {
             InfoLine("型号", status?.device?.ifBlank { "OnePage" } ?: "—")
             Hairline()
             InfoLine("固件版本", status?.version?.ifBlank { "—" } ?: "—")
+        }
+
+        if (onOpenFirmware != null && hubFirmware) {
+            Spacer(Modifier.height(12.dp))
+            OnePageCard(padding = 10.dp) {
+                ActionRow(
+                    icon = Icons.Rounded.Upgrade,
+                    title = "固件更新",
+                    subtitle = "检查 onepage-hub 最新固件并 OTA 升级",
+                    onClick = onOpenFirmware,
+                )
+            }
         }
 
         Spacer(Modifier.height(12.dp))

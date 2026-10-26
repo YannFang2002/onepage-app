@@ -75,7 +75,15 @@ class ReleaseParserTest {
         assertEquals("2026-10-26", release.publishedDate)
         assertEquals("OnePage-1.0.2.apk", release.apk?.name)
         assertEquals(2_320_123L, release.apk?.size)
+        assertEquals("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef", release.apk?.sha256)
         assertEquals(2, release.assets.size)
+    }
+
+    @Test
+    fun `gitee payloads without a digest fall back to no checksum`() {
+        val release = ReleaseParser.parse(GITEE_LATEST)
+
+        assertEquals(null, release.apk?.sha256)
     }
 
     @Test
@@ -164,6 +172,7 @@ class ReleaseParserTest {
       "name": "OnePage-1.0.2.apk",
       "content_type": "application/vnd.android.package-archive",
       "size": 2320123,
+      "digest": "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
       "browser_download_url": "https://github.com/YannFang2002/onepage-app/releases/download/v1.0.2/OnePage-1.0.2.apk"
     },
     {

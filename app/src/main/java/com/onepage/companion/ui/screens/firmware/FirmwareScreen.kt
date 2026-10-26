@@ -43,7 +43,7 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
 /**
- * 固件升级（OTA）：只对 `onepage-hub-*` 固件开放。
+ * 固件更新（OTA）：只对 `onepage-hub-*` 固件开放。
  *
  * 升级包从 Gitee 镜像 / GitHub Releases 拉取 `firmware.bin`，再 POST 到设备的
  * `/api/ota`；设备落 SD、校验、写下一分区后自行重启，App 只负责轮询状态。
@@ -90,7 +90,7 @@ fun FirmwareContent(
             .padding(horizontal = 22.dp)
             .padding(bottom = 112.dp)
     ) {
-        SubHeader(eyebrow = "设备", title = "固件升级", onBack = onBack)
+        SubHeader(eyebrow = "设备", title = "固件更新", onBack = onBack)
         Spacer(Modifier.height(14.dp))
 
         if (!supported) {

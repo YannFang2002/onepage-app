@@ -56,6 +56,7 @@ fun MoreScreen(
     state: SessionUiState,
     updates: UpdateUiState,
     onCheckUpdate: () -> Unit,
+    onDownloadUpdate: () -> Unit,
     onDisconnect: () -> Unit,
 ) {
     var page by remember { mutableStateOf(MorePage.Root) }
@@ -80,7 +81,11 @@ fun MoreScreen(
             MorePage.Fonts -> FontsScreen(api = api, onBack = { page = MorePage.Root })
             MorePage.Opds -> OpdsScreen(api = api, onBack = { page = MorePage.Root })
             MorePage.Wifi -> WifiScreen(api = api, onBack = { page = MorePage.Root })
-            MorePage.Device -> DeviceInfoScreen(state = state, onBack = { page = MorePage.Root })
+            MorePage.Device -> DeviceInfoScreen(
+                state = state,
+                onBack = { page = MorePage.Root },
+                onOpenFirmware = { page = MorePage.Firmware },
+            )
             MorePage.Firmware -> FirmwareScreen(
                 api = api,
                 currentVersion = state.status?.version.orEmpty(),
@@ -89,6 +94,7 @@ fun MoreScreen(
             MorePage.Update -> UpdateScreen(
                 state = updates,
                 onCheck = onCheckUpdate,
+                onDownload = onDownloadUpdate,
                 onBack = { page = MorePage.Root },
             )
             MorePage.About -> AboutScreen(onBack = { page = MorePage.Root })
@@ -159,7 +165,7 @@ private fun MoreHome(
                 Hairline(inset = 10.dp)
                 ActionRow(
                     icon = Icons.Rounded.Upgrade,
-                    title = "固件升级",
+                    title = "固件更新",
                     subtitle = "${state.status?.version.orEmpty()} · OTA",
                     onClick = { onOpen(MorePage.Firmware) },
                 )

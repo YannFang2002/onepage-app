@@ -202,6 +202,7 @@ onepage-app/
 | M7 | v1.0.2 检查更新：Gitee 镜像优先 / GitHub 兜底，进应用即检查 | ✅ 完成 |
 | M8 | v1.0.3 未连接可看关于/更新、断开不再崩溃、热点加入失败可诊断可续连 | ✅ 完成 |
 | M9 | v1.0.3 追加：`onepage-hub` 固件 OTA（镜像优先 Gitee → GitHub，推送 `/api/ota`） | ✅ 完成 |
+| M10 | v1.0.4 App 内下载并安装更新（SHA-256 校验 + FileProvider 安装器）；合并 `onepage-hub-app` 副本 | ✅ 完成 |
 
 **未做（明确留到 v2）**：热点一键加入的原生流程（当前引导用户到系统 Wi-Fi 设置）、断点续传、阅读进度、BLE。
 **验收方式**：本机无可用模拟器（缺硬件加速驱动），UI 通过 Compose Preview 截图测试（`gradlew updateDebugScreenshotTest`）逐屏渲染检查；功能路径对照固件源码静态核对 + `tools/mock-device` 可随时联调。

@@ -84,7 +84,12 @@ object ReleaseParser {
             val name = item.optString("name").trim()
             val url = item.optString("browser_download_url").trim()
             if (name.isEmpty() || url.isEmpty()) continue
-            assets += ReleaseAsset(name = name, url = url, size = item.optLong("size"))
+            assets += ReleaseAsset(
+                name = name,
+                url = url,
+                size = item.optLong("size"),
+                digest = item.optString("digest").trim(),
+            )
         }
         return assets
     }

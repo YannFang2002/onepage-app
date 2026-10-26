@@ -5,8 +5,17 @@ data class ReleaseAsset(
     val name: String,
     val url: String,
     val size: Long = 0,
+    /** e.g. `sha256:ab12…` — present on GitHub, absent on Gitee. */
+    val digest: String = "",
 ) {
     val isApk: Boolean get() = name.endsWith(".apk", ignoreCase = true)
+
+    /** Lower-case hex SHA-256 when the release published one. */
+    val sha256: String?
+        get() = digest.substringAfter("sha256:", "")
+            .trim()
+            .lowercase()
+            .takeIf { it.length == 64 && it.all { ch -> ch in '0'..'9' || ch in 'a'..'f' } }
 }
 
 /**
